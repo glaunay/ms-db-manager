@@ -1,0 +1,8 @@
+{
+    "views" : {
+        "organisms" : {
+            "map" : "function(doc) { for (var org in doc) { if (org.charAt(0) != '_') { var nb_occurences = 0; for (var seq_ref in doc[org]){ nb_occurences = nb_occurences + doc[org][seq_ref].length} emit(org,nb_occurences)}}}"
+        }
+    }
+}
+       

@@ -1,0 +1,27 @@
+{
+  "name": "ms-db-manager",
+  "version": "1.0.0",
+  "description": "HTTP service to perform delete/list operations on crispr NoSQL database volumes",
+  "main": "index.js",
+  "typings": "index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/glaunay/ms-db-manager.git"
+  },
+  "author": "GL, CH",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/glaunay/ms-db-manager/issues"
+  },
+  "homepage": "https://github.com/glaunay/ms-db-manager#readme",
+  "dependencies": {
+    "@types/node": "^12.12.14",
+    "commander": "^4.0.1",
+    "express": "^4.17.1",
+    "node-fetch": "^2.6.0",
+    "winston": "^3.2.1"
+  }
+}
