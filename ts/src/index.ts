@@ -4,9 +4,8 @@ import { logger, setLogLevel, setFile, logLvl } from "./logger";
 import DBmanager = require("./manager");
 import { inspect } from "util";
 import fs = require('fs');
-import assert = require('assert');
-import { prototype } from "events";
-
+import { timeIt } from "./utils";
+import * as t from "./cType";
 //node index.js --batch --verbosity debug --design ../views/byOrganism.json
 
 program
@@ -21,6 +20,7 @@ program
   .option("-o, --output <logFile>", "fpath to the log file")
   .option("-n, --namespace <ViewNameSpace>", "Name of the database the set or read view definitions", "vNS")
   .option("-l, --list <specie>", "Specie to list sgRNA")
+  .option("-r, --remove <specie>", "Specie to delete sgRNA")
   .parse(process.argv);
 
 
@@ -46,9 +46,10 @@ logger.log("info", "\t\t***** Starting CRISPR databases manager MicroService ***
       DBmanager._watch();
       return;
   }
-  if(! program.target) 
+  if(! program.target) {
     logger.info("No Target databases specified, exiting");
-
+    process.exit(0);
+  }
   const _doc = program.design ? await parseDesign(program.design) : undefined;
   const dbTarget = program.target
   const viewNS = program.namespace;
@@ -56,27 +57,61 @@ logger.log("info", "\t\t***** Starting CRISPR databases manager MicroService ***
     logger.debug(`Design document content\n${inspect(_doc)}`);
 // if (program.batch) {
   try {  
-    logger.warn(viewNS);
+    const t1 = process.hrtime();
     const summary = await DBmanager.registerAllBatch(dbTarget, viewNS, _doc, 2);
-    logger.info(`Promised\n${inspect(summary, { showHidden: true, depth: 10 })}`);
-    logger.info(summary.length);
+    const t2 = timeIt(t1);
+    logger.success(`Total buildIndex done in ${t2[0]}H:${t2[1]}M:${t2[0]}S`);
+    //logger.info(`Promised\n${inspect(summary, { showHidden: true, depth: 10 })}`);
+    //logger.info(summary.length);
   } catch(e) {
     logger.fatal(`${e}`);
   };
 
-  if(program.list) {
-    let view = await listSpecie(program.list, viewNS);
-    logger.info(`${inspect(view)}`)
-  } 
+  if(program.list)
+    await listSpecie(program.list, viewNS);
+  if(program.remove)
+    await deleteSpecie(program.remove, viewNS);
+  
 })();
 
 async function listSpecie(specie:string, ns:string) {
   //await DBmanager.view(ns, `organism?key=${specie}`);
-  let res = await DBmanager.list(ns, specie);
-  logger.info(`==><==\n${res}`);
+  let res;
+  try {
+    res = await DBmanager.list(ns, specie);
+  } catch (e){
+    throw new Error(`listSpecie failed ${e}`);
+  }
+  const total = res.reduce( (acc, cur:t.boundViewInterface)=>  acc + cur.data.total_rows , 0);
+  const max   = res.reduce( (acc, cur:t.boundViewInterface)=>  acc > cur.data.total_rows ? acc : cur.data.total_rows , 0);
+  const min   = res.reduce( (acc, cur:t.boundViewInterface)=>  acc < cur.data.total_rows ? acc : cur.data.total_rows , max);
+  logger.debug(`==><==\n${inspect(res)}`);
+  
+  logger.success(`A total of ${total} sgRNA were listed in ${res.length} volumes, (min, max) = (${min}, ${max})`);
+  logger.debug(`EG:${inspect(res[0].data.rows[0])}`)
+  return res;
 }
+
+async function deleteSpecie(specie:string, ns:string) {
+  const _fnPredicateGen = function(sp:string) {
+    return (k:string, value:any) => {
+      if (k === sp) return undefined;
+      return value;
+    }
+  };
+
+  //await DBmanager.view(ns, `organism?key=${specie}`);
+  try {
+    let res:t.boundViewInterface[] = await listSpecie(specie, ns); 
+    let fnPredicate = _fnPredicateGen(specie);
+    DBmanager.filter(res, fnPredicate);
+  } catch (e){
+    logger.fatal(`deleteSpecie failed:\n${e}`);
+  }
+  //return res;
+}
+
 function parseEndpoints(_endPoints:string):string[]{
-  logger.info('OOO');
   const rangeRegExp=/(\[(\d+)-(\d+)\])/;
   const endPointInject = (acc:string[], cur:string) => {
     const m =rangeRegExp.exec(cur);
@@ -111,47 +146,5 @@ function parseDesign(filePath:string):Promise<{}>{
         throw new Error(err);
       }
     })
-  });
-}
-//DBmanager.remove();
-
-
-
-
-async function promiseAllBatch(it:any[], n:number = 2):Promise<any> {
-  let results:any[] = new Array(it.length);
-  let total = it.length;
-  let done = 0;
-  let currIndex:number;
-
-  function goAsync(it:any[], i:number, total:number, n:number, /*done:number,*/ results:any[], resolveAll:any) {
-    let datum = it[i];
-    return new Promise((resolve, reject) => {
-     
-     
-      logger.warn(`Launching task ${i} w/ datum ${datum} and timer ${Math.floor(10000/(i+1))}`);
-      setTimeout( ( )=> { 
-          logger.warn(`Registered ${i} Finishes`); 
-          let comp = `R${datum}`;
-          resolve([i, comp]);},
-        Math.floor(10000/(i+1))
-      );
-    }).then((_) => {
-      done++;
-      let v = _ as any[];
-      results[v[0]] = v[1];
-      logger.debug(`Done: ${done}/${total} [ i_index ${v[0]}, ${i} :: t_batch ${n}]`);
-      if (i + n < total)
-        goAsync(it, i + n, total, n/*, done*/, results, resolveAll);
-      if (done == total)
-        resolveAll(results);
-    });
-  };
-
-  return new Promise((resolveAll, rejectAll) => {
-    let work = []
-    for (currIndex = 0 ; currIndex < (n < total ? n : total) ; currIndex++)
-      work.push(goAsync(it, currIndex, total, n, /*done,*/ results, resolveAll));
-    //not working //Promise.all(work).then(()=>{resolveAll(results)});
   });
 }

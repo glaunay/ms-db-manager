@@ -8,7 +8,7 @@ const fetch = require('node-fetch');
 const readline = require('readline');
 
 let endPointsRegistry: vLib.Volume[] = []; 
-
+let oEndPointsRegistry:{ [name:string]:vLib.Volume };
 let CREDS:t.credentials|undefined;
 let ROOT:string;
 let PREFIX:string;
@@ -83,6 +83,8 @@ Querying up to n views in parrallel
 */
 export async function registerAllBatch(endPoints:string[], viewNS:string, designObject?:{}, n:number = 2):Promise<any> {
     endPointsRegistry = endPoints.map( (endPoint) => new vLib.Volume(`${PREFIX}/${endPoint}`, endPoint, CREDS) );
+    oEndPointsRegistry = {};
+    endPointsRegistry.forEach((v:vLib.Volume) => { oEndPointsRegistry[v.name] = v; });
 
     let results:any[] = new Array(endPoints.length);
     let total = endPoints.length;
@@ -91,7 +93,7 @@ export async function registerAllBatch(endPoints:string[], viewNS:string, design
     
     function goAsync(it:any[], i:number, total:number, n:number, /*done:number,*/ results:any[], resolveAll:any, rejectAll:any) {
         let _volume = it[i];
-        _volume.getIndex(viewNS, designObject).then((dbHand:{}) => {
+        _volume.buildIndex(viewNS, designObject).then((dbHand:{}) => {
         done++;
         results[i] = dbHand;
         logger.debug(`Done: ${done}/${total} [ i_index ${i} :: t_batch ${n}]`);
@@ -136,7 +138,7 @@ export async function activeIndexTasks(constraints?:taskConstraint) {
     let _ = await activeTasks();
     const reDatabase = /shards\/[^\/]+\/(.+)\.[\d]+$/;
 
-    logger.debug(`raw tasks Array ${inspect(_)}`);
+    logger.silly(`raw tasks Array ${inspect(_)}`);
     let rawTasks:indexTask[] = _.tasks.filter(isIndexTask);
     if (constraints)
         return rawTasks.filter((e:indexTask)=> {
@@ -175,19 +177,37 @@ export async function remove(toDel?:t.delConstraints) : Promise<any> {
 
 //}
 
+ 
 
 // Aggregated rerequest here
-export async function list(ns:string, specie:string):Promise<{}> {
+export async function list(ns:string, specie:string):Promise<t.boundViewInterface[]> {
+    const sp = specie.replace(' ','%20')
     //let views:Promise<any>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd));
-    let spKeyArray = await view(ns, `organism?key=${specie}`);
-    return spKeyArray;
+    let spKeyArray:t.viewInterface[] = await view(ns, `organisms?key="${sp}"`);
+    logger.warn(`OUHO${inspect(spKeyArray)}`);
+    logger.debug(`${inspect(spKeyArray[0].rows[0])}`);
+    return spKeyArray.map((v, i) => {return { vID : 'organisms', 'vNS' : ns, '_' : i, 'source' : endPointsRegistry[i].name, "data" : v };});
     //return Promise.all(views);
 }
 
-export function view(ns:string, cmd:string):Promise<{}> {
-    let views:Promise<any>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd));
+export /*async*/ function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateFnType) {
+    let target = inputs[0].source;
+    let key = inputs[0].data.rows[0].id;
+    //target = "crispr_rc01_v35";
+    //key = "GATAAAAAAAAAGCCTATCATGG";
+    //oVol.filter(key, _fn);
+    logger.warn(`>>${target} ${key}`);
+    let oVol:vLib.Volume = oEndPointsRegistry[target];
+    let keys = inputs[0].data.rows.map((d:any) => d.id);
+    oVol.getBulkDoc(keys);
+    
+}
+
+export function view(ns:string, cmd:string):Promise<t.viewInterface[]> {
+    let views:Promise<t.viewInterface>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd));
     return Promise.all(views);
 }
+
 export async function watch() {
     //let timer:NodeJS.Timeout =
     logger.info("Watching Tasks")
