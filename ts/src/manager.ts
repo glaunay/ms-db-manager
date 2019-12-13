@@ -240,18 +240,22 @@ export async function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateF
         let up_err  = 0;
         let del_ok  = 0;
         let del_err = 0;
-        resp[volName].updated.bulkUpdate.forEach((d:any) => {
-            if (d.hasOwnProperty('ok') )
-                up_ok++;
-            else
-                up_err++;
-        })
-        resp[volName].deleted.bulkUpdate.forEach((d:any) => {
-            if (d.hasOwnProperty('ok') )
-                del_ok++;
-            else
-                del_err++;
-        })
+        resp[volName].updated.forEach((slice:any) => {
+            slice.bulkUpdate.forEach((d:any) => {
+                if (d.hasOwnProperty('ok') )
+                    up_ok++;
+                else
+                    up_err++;
+            });
+        });
+        resp[volName].deleted.forEach((slice:any) => {
+            slice.bulkUpdate.forEach((d:any) => {
+                if (d.hasOwnProperty('ok') )
+                    del_ok++;
+                else
+                    del_err++;
+            });
+        });
         logger.info(`filter [${volName}]\t updated (ok/err): ${up_ok}/${up_err} || deleted (ok/err): ${del_ok}/${del_err}`);
     }
     // Log total deletion and volumes report
