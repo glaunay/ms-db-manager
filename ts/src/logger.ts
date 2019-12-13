@@ -15,6 +15,7 @@
 * - win.logger.log('DEBUG', <text>)         - Lower level of logger, debug mode
 */
 const ws = require('winston');
+const moment = require('moment');
 
 const myCustomLevels = {
     levels: {
@@ -29,24 +30,33 @@ const myCustomLevels = {
     colors: {
         fatal: 'red',
         error:  'red',
-        warn:'yellow',
+        warn: 'yellow',
         success: 'green',
-        info:  'cyan',
+        info:  'gray',
         debug: 'blue',
-        silly : 'red'
+        silly : 'cyan'
     }
   };
+
+  // Console transport specific options
+const consoleT = new ws.transports.Console({ 
+  format : ws.format.combine( ws.format.colorize({ all:true }) )
+  })
 // See winston format API at https://github.com/winstonjs/logform
-const cLogger = ws.createLogger({
+const cLogger = ws.createLogger({ /* Format options common to all transports */
   format: ws.format.combine(
-    ws.format.colorize(),
-    ws.format.timestamp(),
+    ws.format.timestamp({
+      format: () => {
+        return moment().format('YYYY-MM-DD hh:mm:ss')
+      }
+    }),
     ws.format.printf((info:any) => `[${info.timestamp}] ${info.level}: ${info.message}`)
   ),
   levels: myCustomLevels.levels,
-  transports: [new ws.transports.Console()]
+  transports: [consoleT]
 });
 
+//cLogger.colorize = process.stdout.isTTY;
 ws.addColors(myCustomLevels.colors);
 
 export type logLvl = 'debug'|'info'|'success'|'warn'|'error'|'critical'|'silly';
@@ -56,7 +66,8 @@ function isLogLvl (value:string) : value is logLvl {
 }
 export function setLogLevel (value : string) : void {
     if (!isLogLvl(value)) throw `Unrecognized logLvel "${value}"`;
-    cLogger.level = value;
+    consoleT.level = value;
+
 }
 
 interface fileTransportOptions {
@@ -69,10 +80,12 @@ interface fileTransportOptions {
   maxRetries?: number, //The number of stream creation retry attempts before entering a failed state. In a failed state the transport stays active but performs a NOOP on it's log function. (default 2)
   zippedArchive?:Boolean,// If true, all log files but the current one will be zipped.
   options?:{} //options passed to fs.createWriteStream (default {flags: 'a'}).
+  colorize?:Boolean
 }
 
 export function setFile(options:fileTransportOptions) {
-  cLogger.add(options);
+  options.colorize = false;
+  cLogger.add( new ws.transports.File(options) );
 }
 
 export {cLogger as logger};

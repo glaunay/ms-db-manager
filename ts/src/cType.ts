@@ -1,3 +1,6 @@
+import { logger } from "./logger";
+import {inspect} from "util";
+
 export interface couchBulkQueryItem {
    id   : string,
    rev ?: string,
@@ -27,10 +30,19 @@ export interface  couchBulkResponse {
 (>'-')> curl -X POST 'localhost:5984/crispr_rc01_v36/_bulk_get' -d '{ "docs" : [ { "id" : "GATAAAAAAAAAAAAAAAAACGG"} ] }' -H "Content-Type: application/json"
 {"results": [{"id": "GATAAAAAAAAAAAAAAAAACGG", "docs": [{"ok":{"_id":"GATAAAAAAAAAAAAAAAAACGG","_rev":"1-e71c6dea7ca42ff0dc4dd29dad71d3e8","Mycoplasma dispar GCF_000941075.1":{"NZ_CP007229.1":["-(413948,413970)"]}}}]}]}
 */
+
+export interface updateBulkReport { 
+    updated : any[], // Should be type as _bulk_docs response
+    deleted : any[] //https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
+}
 export interface viewInterface {
     total_rows : number,
     offset : number,
-    rows : {[k:string]:any}
+    rows : {[k:string]:any}[]
+}
+
+export function isEmptyViewInterface(v:viewInterface) {
+    return v.rows.length == 0;
 }
 
 export interface boundViewInterface {
@@ -39,6 +51,10 @@ export interface boundViewInterface {
     vID : string,
     source : string,
     data : viewInterface
+}
+
+export function isEmptyBoundViewInterface(v:boundViewInterface) {
+    return isEmptyViewInterface(v.data);
 }
 
 export interface delConstraints {
@@ -66,37 +82,55 @@ export function isCouchResponse(data:{}) : data is couchResponse {
 export interface couchError {
     error: string;
 }
+export function isCouchError(data:any): data is couchError{
+    return data.hasOwnProperty("error");
+}
 
 export interface couchTimeOut extends couchError {
-    error  : "timeout",
     reason : "The request could not be processed in a reasonable amount of time."
 }
 
 export function isCouchTimeOut(data:couchError): data is couchTimeOut {
-    if(data.hasOwnProperty("error"))
-        return data.error === 'timeout'
+    if(isCouchError(data)) 
+        return data.error === "timeout"
+    return false;
+}
+
+export interface couchUpdateConflict extends couchError{
+    reason : "Document update conflict."
+}
+export function isCouchUpdateConflict(data:couchError): data is couchUpdateConflict {
+    if(isCouchError(data)) 
+        return data.error === "conflict"
     return false;
 }
 
 export interface couchNotFound extends couchError {
-    error  : "not_found",
     reason : "missing"
 }
 
 export function isCouchNotFound(data:couchError): data is couchNotFound {
-    if(data.hasOwnProperty("error"))
+    if(isCouchError(data)) 
         return data.error === 'not_found'
     return false;
 }
 
-export interface documentInterface {
+export interface documentInterfaceCore {
     '_id' : string,
     '_rev' : string,
+}
+
+
+export interface documentInterface extends documentInterfaceCore {
     [key: string]: any 
 }
 
-export function isDocument(data:{}): data is documentInterface {
+export function isDocument(data:{}): data is documentInterfaceCore {
     return data.hasOwnProperty("_id") && data.hasOwnProperty("_rev");
+}
+
+export function isEmptyDocument(data:{}): Boolean {
+    return data.hasOwnProperty("_id") && data.hasOwnProperty("_rev") && Object.keys(data).length == 2;
 }
 
 export interface nodePredicateFnType { 

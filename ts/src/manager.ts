@@ -3,6 +3,7 @@ import vLib = require("./volume");
 import * as t from "./cType";
 import { logger } from "./logger";
 import { inspect } from "util";
+import { timeIt, isEmptyObject } from './utils';
 
 const fetch = require('node-fetch');
 const readline = require('readline');
@@ -35,28 +36,14 @@ function isIndexTask(data:any): data is indexTask {
         return data.type === 'indexer'
     return false;
 }
-
-//{"error":"timeout","reason":"The request could not be processed in a reasonable amount of time."}
-
-
-//rm -rf /Users/guillaumelaunay/Library/Application\ Support/CouchDB2/var/lib/couchdb/.shards/*/crispr2.*_design
-/*
-INDEX STAGE
-{
-    node: 'couchdb@localhost',
-    pid: '<0.16880.23>',
-    changes_done: 101101,
-    database: 'shards/80000000-ffffffff/crispr_dvl.1551373752',
-    design_document: '_design/by_org',
-    indexer_pid: '<0.16849.23>',
-    progress: 7,
-    started_on: 1575886974,
-    total_changes: 1300651,
-    type: 'indexer',
-    updated_on: 1575887004
-  }
-*/
-
+    /**
+     *
+     * A function to raise expection in the event of
+     * a non successfull actions reported in a couchDB response document
+     * @param {Promise<t.couchResponse>} couchMsg The couch response  Document
+     * @returns {Promise<t.couchResponse>} The couch response document not containing errors
+     * @memberof DBmanager
+     */
 async function parseMsg(couchMsg:Promise<t.couchResponse>):Promise<t.couchResponse> {
     logger.debug(`PARSEMSG input type ${typeof(couchMsg)}`);
     try {
@@ -71,16 +58,16 @@ async function parseMsg(couchMsg:Promise<t.couchResponse>):Promise<t.couchRespon
 
 }
 
-// Systematic test of registred Database for index and 
-//export async function registerAll(endPoints:string[], designObject:{}):Promise<any>/*Promise<endPointStats>*/{
-//    endPointsRegistry = endPoints.map( (endPoint) => new vLib.Volume(`${PREFIX}/${endPoint}`, endPoint, CREDS) );
-//    let res = await Promise.all(endPointsRegistry.map(volume => volume.setIndex(designObject)).map(parseMsg));
-//    return res;
-//}
-
-/*
-Querying up to n views in parrallel
-*/
+    /**
+     * Registered provided database and test their connections
+     * by querying each of them for a default view.
+     * This can take some time if indexation is required
+     * @param {string[]} endPoints names of the databases
+     * @param {string} viewNS name of the document storing the view definitions on the database
+     * @param {{}} designObject Optional object storing the view definitions
+     * @returns {Object} Raw results of the queried views
+     * @memberof DBmanager
+     */
 export async function registerAllBatch(endPoints:string[], viewNS:string, designObject?:{}, n:number = 2):Promise<any> {
     endPointsRegistry = endPoints.map( (endPoint) => new vLib.Volume(`${PREFIX}/${endPoint}`, endPoint, CREDS) );
     oEndPointsRegistry = {};
@@ -112,9 +99,13 @@ export async function registerAllBatch(endPoints:string[], viewNS:string, design
     });
   }
 
-
-
-
+    /**
+     * Init connection to a couchDB daemon
+     * @param {string} dbRoot HTTP endpoint to couchDB server
+     * @param {t.credentials} userID admin user and password
+     * @returns {Promise}
+     * @memberof DBmanager
+     */
 export async function connect(dbRoot:string, userID?:t.credentials):Promise<any>/*Promise<endPointStats>*/{
     ROOT = dbRoot;
     CREDS = userID;
@@ -134,6 +125,13 @@ export async function connect(dbRoot:string, userID?:t.credentials):Promise<any>
     }
 }
 
+    /**
+     * Get the a list of task matching 
+     * provided constraints. eg: a particular database
+     * @param {taskConstraint} constraints A set of constraints
+     * @returns {Promise<indexTask[]>} List of task
+     * @memberof DBmanager
+     */
 export async function activeIndexTasks(constraints?:taskConstraint) {
     let _ = await activeTasks();
     const reDatabase = /shards\/[^\/]+\/(.+)\.[\d]+$/;
@@ -152,7 +150,12 @@ export async function activeIndexTasks(constraints?:taskConstraint) {
             });
     return rawTasks;
 }
-
+    /**
+     * Monitor the current active task of the couchDB process
+     * using the "/_active_tasks" endpoint
+     * @returns { Promise<{}> } An object with a single "task" key, whose value is a task array
+     * @memberof DBmanager
+     */
 export async function activeTasks() {
     try {
         logger.silly(`${PREFIX + '/_active_tasks'}`);
@@ -168,39 +171,90 @@ export async function activeTasks() {
         throw (e);
     }
 }
-/*
-export async function remove(toDel?:t.delConstraints) : Promise<any> {
-
-}*/
- //Type is key interface
-//export async function list(toDel?:t.delConstraints) /* : Promise<IteratorResult<T>>*/ {
-
-//}
-
- 
-
-// Aggregated rerequest here
+    /**
+     * Execute a predefined "organism?key=[SPECIE]" view
+     * on all registered databases
+     * @param {string} ns The namespace of the view
+     * @param {string} specie The namespace of the specie 
+     * @returns {Promise<t.boundViewInterface[]>} List of resulting views, each wrapped with the database and view names
+     * @memberof DBmanager
+     */
 export async function list(ns:string, specie:string):Promise<t.boundViewInterface[]> {
     const sp = specie.replace(' ','%20')
     //let views:Promise<any>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd));
     let spKeyArray:t.viewInterface[] = await view(ns, `organisms?key="${sp}"`);
-    logger.warn(`OUHO${inspect(spKeyArray)}`);
-    logger.debug(`${inspect(spKeyArray[0].rows[0])}`);
+
     return spKeyArray.map((v, i) => {return { vID : 'organisms', 'vNS' : ns, '_' : i, 'source' : endPointsRegistry[i].name, "data" : v };});
-    //return Promise.all(views);
 }
 
-export /*async*/ function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateFnType) {
-    let target = inputs[0].source;
-    let key = inputs[0].data.rows[0].id;
-    //target = "crispr_rc01_v35";
-    //key = "GATAAAAAAAAAGCCTATCATGG";
-    //oVol.filter(key, _fn);
-    logger.warn(`>>${target} ${key}`);
-    let oVol:vLib.Volume = oEndPointsRegistry[target];
-    let keys = inputs[0].data.rows.map((d:any) => d.id);
-    oVol.getBulkDoc(keys);
-    
+export async function rank(ns:string):Promise<{[k:string]:number|string}[]> {
+  
+    let spKeyArray:t.viewInterface[] = await view(ns, `organisms`);
+    let _:{[k:string]:number} = {};
+    logger.debug(`DDD${spKeyArray}`);
+    spKeyArray.forEach((v:t.viewInterface, i) => {
+        v.rows.forEach((d:any) => {
+            if ( ! _.hasOwnProperty(d.key) )
+                _[d.key] = 0;
+            _[d.key]++;
+        });
+    });
+    return Object.keys(_).map((k:string) => { return { 'specie' : k, 'count' : _[k]}; })
+        .sort((a,b)=>{ if (a.count < b.count) return -1;
+                       if (a.count < b.count) return 1;
+                       return 0;
+                     });
+}
+
+    /**
+     * Update documents extracted from a view results using provided update function
+     *
+     * @param {t.boundViewInterface[]} inputs List of view results
+     * @param {t.nodePredicateFnType[]} _fn A document update function 
+     * @param {Boolean} sync An optional boolean to force indexation after update, default=true
+     * @returns { Promise<{}> } A report of the update process
+     * @memberof DBmanager
+     */
+export async function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateFnType, sync=true) {
+    const resp:{[k:string]: any} = {};
+    for (let boundView of inputs) {
+        if(t.isEmptyBoundViewInterface(boundView))
+            continue;
+        const oVol:vLib.Volume = oEndPointsRegistry[boundView.source];
+        let keys = boundView.data.rows.map((d:any) => d.id);
+        const syncSpecs = {
+            'vNS' : boundView.vNS,
+            'vID' : boundView.vID
+        };
+        resp[boundView.source] = await oVol.updateBulk(keys, _fn, sync?syncSpecs:undefined );
+    }
+    if (isEmptyObject(resp)) {
+        logger.warn("No filter operation performed");
+        return;
+    }
+
+    logger.info(`filter summary`);
+    logger.debug(`${inspect(resp,{depth:5})}`);
+    for (let volName in resp) {
+        let up_ok   = 0;
+        let up_err  = 0;
+        let del_ok  = 0;
+        let del_err = 0;
+        resp[volName].updated.bulkUpdate.forEach((d:any) => {
+            if (d.hasOwnProperty('ok') )
+                up_ok++;
+            else
+                up_err++;
+        })
+        resp[volName].deleted.bulkUpdate.forEach((d:any) => {
+            if (d.hasOwnProperty('ok') )
+                del_ok++;
+            else
+                del_err++;
+        })
+        logger.info(`filter [${volName}]\t updated (ok/err): ${up_ok}/${up_err} || deleted (ok/err): ${del_ok}/${del_err}`);
+    }
+    // Log total deletion and volumes report
 }
 
 export function view(ns:string, cmd:string):Promise<t.viewInterface[]> {
@@ -209,7 +263,6 @@ export function view(ns:string, cmd:string):Promise<t.viewInterface[]> {
 }
 
 export async function watch() {
-    //let timer:NodeJS.Timeout =
     logger.info("Watching Tasks")
     let n = 0;
     setInterval(()=>{

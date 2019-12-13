@@ -6,39 +6,40 @@ import { inspect } from "util";
 import fs = require('fs');
 import { timeIt } from "./utils";
 import * as t from "./cType";
-//node index.js --batch --verbosity debug --design ../views/byOrganism.json
+//node index.js --batch --verbosity deb ug --design ../views/byOrganism.json
+//curl -X POST localhost:5984/test/_bulk_docs -d '{"docs" : [ {"k" : "v", "_rev" : "2-280afe99ffb262c4a326fe28019cca54"}]}' -H"Content-type:application/json"
+
 
 program
   .option("-c, --config <path>", "Load config file")
   .option("-v, --verbosity <logLevel>", "Set log level (debug, info, success, warning, error, critical)")
-  .option("-t, --test", "Run tests of the warehouse")
-  .option("-p, --noproxy", "Start the microservice without the proxy (to make curl command working)")
   .option("-w, --watch", "Run couchDB task watcher")
-  .option("-b --batch", "blablabla")
+  //.option("-b --batch", "blablabla")
   .option("-t --target <targetsOpt>", "Target databases specified as comma-separated list or regexp", parseEndpoints)
   .option("-d, --design <pathToFile>", "Design Document containing views definitions")
   .option("-o, --output <logFile>", "fpath to the log file")
   .option("-n, --namespace <ViewNameSpace>", "Name of the database the set or read view definitions", "vNS")
   .option("-l, --list <specie>", "Specie to list sgRNA")
+  .option("-r, --rank", "Rank species by sgRNA counts")
   .option("-r, --remove <specie>", "Specie to delete sgRNA")
   .parse(process.argv);
 
 
 const logLevel:logLvl = program.verbosity ? program.verbosity : 'info';
 if (program.output) {
-  setFile({ "level": logLevel, "filename" : program.output });
+  setFile({ "level": logLevel, "filename" : program.output, options : {flags: 'w'} });
   setLogLevel('info')
 } else {
   setLogLevel(logLevel);
 }
 
-logger.log("info", "\t\t***** Starting CRISPR databases manager MicroService *****\n");
+logger.info("\t\t***** Starting CRISPR databases manager MicroService *****\n");
 
 
 (async () => {
   try {
     let res = await DBmanager.connect('localhost:5984', {'login' : "wh_agent", 'pwd' : "couch"});
-    logger.info(`${inspect(res, true, 3)}`);
+    logger.debug(`${inspect(res)}`);
   } catch (e) {
     logger.fatal(e);
   }
@@ -55,18 +56,18 @@ logger.log("info", "\t\t***** Starting CRISPR databases manager MicroService ***
   const viewNS = program.namespace;
   if (_doc)
     logger.debug(`Design document content\n${inspect(_doc)}`);
-// if (program.batch) {
   try {  
     const t1 = process.hrtime();
     const summary = await DBmanager.registerAllBatch(dbTarget, viewNS, _doc, 2);
+    logger.debug(inspect(summary));
     const t2 = timeIt(t1);
     logger.success(`Total buildIndex done in ${t2[0]}H:${t2[1]}M:${t2[0]}S`);
-    //logger.info(`Promised\n${inspect(summary, { showHidden: true, depth: 10 })}`);
-    //logger.info(summary.length);
   } catch(e) {
     logger.fatal(`${e}`);
   };
 
+  if(program.rank)
+    await rankSpecies(viewNS);
   if(program.list)
     await listSpecie(program.list, viewNS);
   if(program.remove)
@@ -74,21 +75,22 @@ logger.log("info", "\t\t***** Starting CRISPR databases manager MicroService ***
   
 })();
 
+async function rankSpecies(viewNS:string) {
+  const report = await DBmanager.rank(viewNS);
+  logger.info(inspect(report, {depth:6}));
+}
 async function listSpecie(specie:string, ns:string) {
-  //await DBmanager.view(ns, `organism?key=${specie}`);
   let res;
   try {
     res = await DBmanager.list(ns, specie);
   } catch (e){
     throw new Error(`listSpecie failed ${e}`);
   }
-  const total = res.reduce( (acc, cur:t.boundViewInterface)=>  acc + cur.data.total_rows , 0);
-  const max   = res.reduce( (acc, cur:t.boundViewInterface)=>  acc > cur.data.total_rows ? acc : cur.data.total_rows , 0);
-  const min   = res.reduce( (acc, cur:t.boundViewInterface)=>  acc < cur.data.total_rows ? acc : cur.data.total_rows , max);
-  logger.debug(`==><==\n${inspect(res)}`);
+  const total = res.reduce( (acc, cur:t.boundViewInterface)=>  acc + cur.data.rows.length , 0);
+  const max   = res.reduce( (acc, cur:t.boundViewInterface)=>  acc > cur.data.rows.length ? acc : cur.data.rows.length , 0);
+  const min   = res.reduce( (acc, cur:t.boundViewInterface)=>  acc < cur.data.rows.length  ? acc : cur.data.rows.length , max);
   
-  logger.success(`A total of ${total} sgRNA were listed in ${res.length} volumes, (min, max) = (${min}, ${max})`);
-  logger.debug(`EG:${inspect(res[0].data.rows[0])}`)
+  logger.success(`listSpecie:A total of ${total} sgRNA were listed in ${res.length} volumes, (min, max) = (${min}, ${max})`);
   return res;
 }
 

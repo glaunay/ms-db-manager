@@ -5,40 +5,37 @@ import fetch from "node-fetch";
 import { inspect } from "util";
 import { isObject, isEmptyObject } from './utils';
 import { timeIt } from './utils';
-/*
- view management
 
- 1ST view query leads to error 404 due to time delay
- Ensure View is rebuild once deletion complete -> release lock
-    -> view-rebuild trigger to identify, (CH presumes view  query)
-    -> view-rebuild finish event to identify to allow lock release 
-
-The definition of a view within a design document also creates an index 
-based on the key information defined within each view. The production 
-and use of the index significantly increases the speed of access and 
-searching or selecting documents from the view. However, the index is 
-not updated when new documents are added or modified in the database.
- Instead, the index is generated or updated, either when the view is 
- first accessed, or when the view is accessed after a document has been 
- updated. In each case, the index is updated before the view query is 
- executed against the database. The consequence of this behavior is that 
- an index update for a view may take an excessive amount of time after a 
- large number of new documents are added or modified. When documents are 
- added or modified incrementally, the index update is much quicker. While 
- all indices would be updated eventually upon access, a system that depends 
- upon design document views may hang or crash while waiting for an initial 
- index update after a large document load (such as after a migration).
+/**
+* Object-oriented API for a single couchDB database
+* 
+* @export
+* @class Volume
 */
-
-
 export class Volume {
     endpoint : string
     name : string
+    
+    /**
+     * Create an instance of a database
+     *
+     * @param {string} url HTTP endpoints of th database eg: localhosr:5984/my_database
+     * @param {string} name Name of the database, usually the last section of its url 
+     * @param {t.credentials} userID admin user and password
+     * @memberof Volume
+     */
     constructor (url:string, name:string, userID?:t.credentials) {
         this.endpoint = url;
         this.name = name;
     }
-    // tasks representations
+
+    /**
+     * Checks for the availablity of the database
+     * Perfomrs a GET request on its endpoint
+     *
+     * @returns { Promise<{}> } A couchDB document with database identity tokens 
+     * @memberof Volume
+     */
     async handshake() {
         try {
             let url = this.endpoint;
@@ -55,6 +52,14 @@ export class Volume {
             throw(e);
         }
     }
+
+    /**
+     * Return a valid view name by looking up in a design document of the database
+     *
+     * @param {string} viewNS name of the design document, use to build the HTTP endpoint
+     * @returns {string} The name of the first view encountered
+     * @memberof Volume
+     */
     async defaultViewKey(viewNS:string){
         const url = this.endpoint + `/_design/${viewNS}`;      
         let res =  await fetch(url, {
@@ -66,7 +71,14 @@ export class Volume {
         return Object.keys(_doc.views)[0];
     }
    
-    //curl -X PUT wh_agent:couch@localhost:5984/crispr_v10/_design/by_org
+    /**
+     * Upload a design document view to the database
+     *
+     * @param {Object} designObject couchDB design document
+     * @param {string} viewNS Name under which the design document will be PUT
+     * @memberof Volume
+     * @returns {Object} A couchDB response document
+     */
     async setIndex(designObject:{}, viewNS:string) {
         logger.debug(`[${this.endpoint}] Setting index`);
         try {
@@ -77,12 +89,48 @@ export class Volume {
             body: JSON.stringify(designObject),
             headers: { "Content-Type": "application/json" }
             });
-            return res.json(); // Seems a Promise Object
+            let _ = await res.json();
+            if (t.isCouchUpdateConflict(_)) {
+                logger.warn(`setIndex: A previous instance of ${viewNS} is found and you provided a design Object`)
+                logger.warn(`setIndex: Overwriting content at [${url}]`)
+                let _ = await this.mergeAt(`/_design/${viewNS}`, designObject);
+                res = await this.setIndex(_, viewNS);
+            }   
+            return _;
         } catch (e) {
             logger.error(`Can't set view from ${this.endpoint} reason : ${e}`);
             throw(e);
         }
     }
+    /**
+     * Update the content of the prodided data object with revision attribute of
+     * the document found at the provided enpoint.
+     * Passed data will be modified.
+     * @param {string} docEndPoint currently stored document location
+     * @param { {[k:string]:string} } data The object to modify for further insertion
+     * @memberof Volume
+     * @returns {{[k:string]:string}} The updated document to insert
+     */
+    async mergeAt(docEndPoint:string, data:{[k:string]:string}) {
+        //`/_design/${viewNS}`
+        const url = this.endpoint + `/${docEndPoint}`;
+        try {
+            logger.debug(`mergeAt [GET]${url}`);
+            let res = await fetch(url, {
+                method: 'GET'
+            });
+            const _ = await res.json();
+            data["_rev"] = _._rev;
+        } catch (e) {
+            throw new Error(`mergeAt:Unable to fetch document ${url}`);
+        }
+        logger.debug(`mergeAt: updated as ${inspect(data)}`);
+        return data;
+    }
+    /**
+     * Wait for the completion of all database indexation processes   
+     * @memberof Volume
+     */
     async waitForIndexation(){
         logger.debug(`${this.name} starts waiting for indexation`);
 
@@ -125,7 +173,17 @@ export class Volume {
                 5000);
         });
     }
-     // WE HANDLE DELAY FOR TASK TRACKING HERE
+
+    /**
+     * Trigger the indexation of the first found view under provided namespace
+     * Alternatively, a design document defining new view(s) can be provided.
+     *  GL : Overwriting ??
+     * @param {Object} designObject couchDB design document
+     * @param {string} ns The namespace under which the view is stored
+     * @param {string} ns The name of the view
+     * @returns {Promise<t.viewInterface>} The view object
+     * @memberof Volume
+     */
      async buildIndex(viewNS:string, designObject?:{}) {
         const time = process.hrtime();
         
@@ -144,27 +202,17 @@ export class Volume {
         } catch (e) {
             throw new Error("build Index failed");
         }
-            /*let url = this.endpoint + `/_design/${viewNS}/_view/${triggerKey}`;
-            logger.debug(`GET:${url}`);
-            let res = await fetch(url, {
-                method: 'GET'
-            });
-            let json = await res.json();
-            if (t.isCouchTimeOut(json)) {
-                await this.waitForIndexation();
-                logger.info(`RDY TO INDEX_PULL ${this.name}`);
-                let resBack = await fetch(url, {
-                    method: 'GET'
-                });
-               json = await resBack.json();
-            }
-            return json; // Seems a Promise Object
-        } catch (e) {
-            logger.error(`Can't get view from ${this.endpoint} reason : ${e}`);
-            throw(e);
-        }*/
-
     }
+
+    /**
+     * Request a view of the database
+     *
+     * @param {Object} designObject couchDB design document
+     * @param {string} ns The namespace under which the view is stored
+     * @param {string} ns The name of the view
+     * @returns {Promise<t.viewInterface>} The view object
+     * @memberof Volume
+     */
     async view (ns:string, cmd:string):Promise<t.viewInterface> { // Should typeguard async json response
         const url = this.endpoint + `/_design/${ns}/_view/${cmd}`;      
         logger.debug(`[view]GET:${url}`);
@@ -173,10 +221,11 @@ export class Volume {
                 method: 'GET'
             });
             let json = await res.json();
+            logger.debug(`${inspect(json)}`)
             if (t.isCouchTimeOut(json)) {
                 logger.warn(`view needs indexation [${url}]`);
                 await this.waitForIndexation();
-                logger.info(`RDY TO INDEX_PULL ${this.name}`);
+                logger.debug(`Pulling index ${this.name}`);
                 let resBack = await fetch(url, {
                     method: 'GET'
                 });
@@ -184,26 +233,52 @@ export class Volume {
             }
             if(t.isCouchNotFound(json))
                 throw new Error(`view::${url} not found`);
-            return json; // Seems a Promise Object
+            logger.debug(`view[${this.name}@${url}] response:${inspect(json)}`);
+            return json;
         } catch (e) {
             logger.error(`Can't get view [${url}]\nfrom ${this.endpoint} reason : ${e}`);
             throw(e);
         }
-
-
     }
-    // We wanna type this function as returnin a document object type
-    async updateDoc(updateFunc:any) {
-
+    
+    /**
+     * Insert a collection of documents in the database
+     *
+     * @param {t.documentInterface[]} data The list of document object
+     * @param {Boolean} delBool If true, document with only "_rev" and "_id" keys will be deleted. Optional, default=true
+     * @returns {Promise<{}>} An Object storing response couchDB document.
+     * @memberof Volume
+     */
+    async bulkInsert(data:t.documentInterface[], delBool:Boolean=false):Promise<any>{
+        const body = {
+                        "docs" : data.map((d) => { d._deleted = delBool; return d;}) 
+                    };
+        try {
+            const url = `${this.endpoint}/_bulk_docs`;
+            const res = await fetch(url, {
+                method: 'POST',
+                body: JSON.stringify(body),
+                headers: { "Content-Type": "application/json" }
+            });
+            let resp = await res.text();
+            resp = JSON.parse(`{ "bulkUpdate" : ${resp}}`);
+            const errors = resp.bulkUpdate.filter((e:{})=>e.hasOwnProperty("error"));
+            if(errors.length > 0) 
+                logger.error(`${this.name}: ${resp.bulkUpdate.length} errors in ${ delBool ? "deletion" : "insertion" }`);
+            else
+                logger.success(`${this.name}: ${resp.bulkUpdate.length} documents successfully ${ delBool ? "deleted" : "inserted" }`)
+            return resp;
+        } catch (e) {
+            throw (e);
+        }
     }
     // docIDs will be consumed
     // WE need TypeGuard on input, at least to detect error
-    async getBulkDoc(docIDs:string[], slice:number=100) {
+    async * getBulkDoc(docIDs:string[], slice:number=500) : AsyncGenerator<t.couchBulkResponse> {
         let i  = 0;
         while (docIDs.length > 0) {
             i++;
             let reqBody:t.couchBulkQuery = { "docs" : docIDs.splice(0, slice).map((key:string)=> { return { "id" : key };}) };
-            logger.info(`slice ${i}`);
             try {
                 let url = this.endpoint + '/_bulk_get';
                 logger.debug(`GET:${url}`);
@@ -213,9 +288,10 @@ export class Volume {
                 headers: { "Content-Type": "application/json" }            
                 });
                 let data = await res.json(); // Seems a Promise Object
-                logger.warn(`getBulkDoc:${inspect(reqBody)}\n${inspect(data)}`);
+                logger.debug(`getBulkDoc:${inspect(reqBody)}\n${inspect(data)}`);
+                yield data;
             } catch (e) {
-                logger.error(`Can't handshake at ${this.endpoint} reason : ${e}`);
+                logger.error(`Can't _bulk_get at ${this.endpoint} reason : ${e}`);
                 throw(e);
             }
         }
@@ -238,21 +314,54 @@ export class Volume {
         }
         throw new Error (`Irregular document pulled ${inspect(json)}`);
     } // Finish this
-    async filterBulk(stuff:t.couchBulkResponse, fn:t.nodePredicateFnType, allowEmptyObject=true) {
-        const filterAccumulator = (acc:t.documentInterface[], d:t.couchBulkResponseChunk) => {
-            return [...acc, d.docs.map((e:t.couchBulkResponseItem)=> this.filter(e.ok, fn, allowEmptyObject) )]
+    async updateBulk(keys:string[], _fn:t.nodePredicateFnType, syncSpecs?:{[k:string]: string}) {
+
+        const _:t.updateBulkReport = {
+            'updated' : [], 'deleted' : []
         }
-        let _:t.documentInterface[] = stuff.results.reduce(  => {
-            ;
-        }, []);
+        // Syncing at the slice level   
+        for await (const couchBulkResp of this.getBulkDoc(keys)) { 
+            const toDel:t.documentInterface[]  = []
+            const toKeep:t.documentInterface[] = []
+            for( let doc of this._updateBulk(couchBulkResp, _fn) ) {
+                if (t.isEmptyDocument(<{}>doc) )
+                    toDel.push(doc)
+                else
+                    toKeep.push(doc)                                            
+            }
+            _.deleted.push( await this.bulkInsert(toDel, true) );
+            _.updated.push( await this.bulkInsert(toKeep) );
+            if (syncSpecs) {
+                logger.debug(`Syncing [${this.name}] ... for ${toDel.length}/${toKeep.length} deletion/update `);
+                const time  = process.hrtime();
+                const vSync = await this.view(syncSpecs.vNS, syncSpecs.vID);
+                const _time = timeIt(time);
+                logger.debug(`filter: syncing of [${this.name}] took ${_time[0]}H:${_time[1]}M:${_time[2]}S`);
+            }
+        }  
+        return _;
+    }   
+    _updateBulk(stuff:t.couchBulkResponse, fn:t.nodePredicateFnType, allowEmptyObject=true): t.documentInterface[] {
+       /*
+        const filterInject = (acc:t.documentInterface[], d:t.couchBulkResponseChunk) => {
+            return [...acc, ...d.docs.map((e:t.couchBulkResponseItem)=> this.filterDoc(e.ok, fn, allowEmptyObject) )]
+            //return d.docs.map((e:t.couchBulkResponseItem)=> this.filterDoc(e.ok, fn, allowEmptyObject) )
+        }
+        //let x = stuff.results.reduce(filterInject, []);
+        */
+        let _:(t.documentInterface|undefined)[] = [];
+        stuff.results.forEach( (result:t.couchBulkResponseChunk)  => {
+            _ = [..._, ...result.docs.map((e:t.couchBulkResponseItem)=> this.updateDoc(e.ok, fn, allowEmptyObject) )];
+        });
+        return <t.documentInterface[]>_.filter((e:t.documentInterface|undefined) => e);
     }
     // Filter the content of a document by applying predicate function to all its key,value pair 
     // CPU bound may have to spawn it if large document
     async filter(docID:string, fn:t.nodePredicateFnType, allowEmptyObject=true) {
         const srcDoc = await this.getDoc(docID);
-        const tgtDoc:t.documentInterface|undefined = await this.filterDoc(srcDoc, fn, allowEmptyObject);
+        const tgtDoc:t.documentInterface|undefined = this.updateDoc(srcDoc, fn, allowEmptyObject);
     }
-    async filterDoc(srcDoc:t.documentInterface, fn:t.nodePredicateFnType, allowEmptyObject=true):Promise<t.documentInterface|undefined> {
+    updateDoc(srcDoc:t.documentInterface, fn:t.nodePredicateFnType, allowEmptyObject=true):t.documentInterface|undefined {
         let tgtDoc:t.documentInterface = {
             "_id": srcDoc._id,
             "_rev": srcDoc._rev
@@ -260,10 +369,9 @@ export class Volume {
 
         const nodePredicate = fn;
         const _fn = (nodekey:string, nodeContent:any) => {
-            console.log(`_fn on ${nodekey}`);
-            //process.exit(0);
+            logger.silly(`_fn on ${nodekey}`);
             if (!nodePredicate(nodekey, nodeContent)) {
-                console.log(`${nodekey} failed`);
+                logger.silly(`${nodekey} failed`);
                 return undefined;
             }
             // The current node holds a scalar,
@@ -287,15 +395,13 @@ export class Volume {
 
             return node;
         }
-        let u = Object.keys(srcDoc).filter((k:string) => ! k.startsWith('_'));
-       
+        
         for (let key of Object.keys(srcDoc).filter((k:string) => ! k.startsWith('_'))) {
             const _ = _fn(key, srcDoc[key]);
             if(_)
                 tgtDoc[key] = _;
         }
-
-        logger.debug(`FILTER : \n${inspect(srcDoc)}\nbecame\n${inspect(tgtDoc)}`);
+        logger.silly(`filterDoc : \n${inspect(srcDoc)}\nbecame\n${inspect(tgtDoc)}`);
         return tgtDoc;
     }
     
@@ -310,9 +416,3 @@ export class Volume {
 //curl -X PUT wh_agent:couch@localhost:5984/crispr_v10/_design/by_org -H "Content-Type : application/json" -d @work/DVL/JS/ms-db-manager/views/byOrganism.json
 //curl -X DELETE 'localhost:5984/crispr_v10/AGGTTTTGATTTGTAGTTTAGGG?rev=4-f3551a9b1fa52867a7ea6305ac494f32'
 //-->{"ok":true,"id":"AGGTTTTGATTTGTAGTTTAGGG","rev":"5-008d91c666168f62996c296cbc0b4cce"}
-
-class Document {
-    //update
-    //create
-    //delete
-}
