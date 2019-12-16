@@ -79,7 +79,7 @@ export class Volume {
      * @memberof Volume
      * @returns {Object} A couchDB response document
      */
-    async setIndex(designObject:{}, viewNS:string) {
+    async setIndex(designObject:{}, viewNS:string, recordLimit=5) {
         logger.debug(`[${this.endpoint}] Setting index`);
         try {
             let url = this.endpoint + `/_design/${viewNS}`;
@@ -196,7 +196,7 @@ export class Volume {
             const triggerKey = await this.defaultViewKey(viewNS);
             logger.debug(`Following key will be used to trigger index building ${triggerKey}`);
             
-            let json = await this.view(viewNS, triggerKey);
+            let json = await this.view(viewNS, triggerKey, 5); // Only display the 5 first records to avoid clutering 
             const _time = timeIt(time);
             logger.success(`${this.name} buildIndex in ${_time[0]}H:${_time[1]}M:${_time[0]}S`);
 
@@ -215,8 +215,15 @@ export class Volume {
      * @returns {Promise<t.viewInterface>} The view object
      * @memberof Volume
      */
-    async view (ns:string, cmd:string):Promise<t.viewInterface> { // Should typeguard async json response
-        const url = this.endpoint + `/_design/${ns}/_view/${cmd}`;      
+    async view (ns:string, cmd:string, limit?:number):Promise<t.viewInterface> { // Should typeguard async json response
+        let url = this.endpoint + `/_design/${ns}/_view/${cmd}`;      
+        if(limit)
+            if(cmd.indexOf('?') >= 0)
+                url += '&limit=${limit}'
+            else
+                url += '?limit=${limit}'
+        
+    
         logger.debug(`[view]GET:${url}`);
         try {
             let res = await fetch(url, {
