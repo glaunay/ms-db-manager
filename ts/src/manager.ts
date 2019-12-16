@@ -36,14 +36,14 @@ function isIndexTask(data:any): data is indexTask {
         return data.type === 'indexer'
     return false;
 }
-    /**
-     *
-     * A function to raise expection in the event of
-     * a non successfull actions reported in a couchDB response document
-     * @param {Promise<t.couchResponse>} couchMsg The couch response  Document
-     * @returns {Promise<t.couchResponse>} The couch response document not containing errors
-     * @memberof DBmanager
-     */
+/**
+ * A function to raise exception in the event of
+ * a non successfull actions reported in a couchDB response document
+ * 
+ * @param {Promise<t.couchResponse>} couchMsg The couch response  Document
+ * @returns {Promise<t.couchResponse>} The couch response document not containing errors
+ * @memberof DBmanager
+ */
 async function parseMsg(couchMsg:Promise<t.couchResponse>):Promise<t.couchResponse> {
     logger.debug(`PARSEMSG input type ${typeof(couchMsg)}`);
     try {
@@ -58,16 +58,17 @@ async function parseMsg(couchMsg:Promise<t.couchResponse>):Promise<t.couchRespon
 
 }
 
-    /**
-     * Registered provided database and test their connections
-     * by querying each of them for a default view.
-     * This can take some time if indexation is required
-     * @param {string[]} endPoints names of the databases
-     * @param {string} viewNS name of the document storing the view definitions on the database
-     * @param {{}} designObject Optional object storing the view definitions
-     * @returns {Object} Raw results of the queried views
-     * @memberof DBmanager
-     */
+/**
+ * Registered provided database and test their connections
+ * by querying each of them for a default view.
+ * This can take some time if indexation is required
+ * 
+ * @param {string[]} endPoints names of the databases
+ * @param {string} viewNS name of the document storing the view definitions on the database
+ * @param {{}} designObject Optional object storing the view definitions
+ * @returns {Object} Raw results of the queried views
+ * @memberof DBmanager
+ */
 export async function registerAllBatch(endPoints:string[], viewNS:string, designObject?:{}, n:number = 2):Promise<any> {
     endPointsRegistry = endPoints.map( (endPoint) => new vLib.Volume(`${PREFIX}/${endPoint}`, endPoint, CREDS) );
     oEndPointsRegistry = {};
@@ -78,34 +79,34 @@ export async function registerAllBatch(endPoints:string[], viewNS:string, design
     let done = 0;
     let currIndex:number;
     
-    function goAsync(it:any[], i:number, total:number, n:number, /*done:number,*/ results:any[], resolveAll:any, rejectAll:any) {
+    function goAsync(it:any[], i:number, total:number, n:number, results:any[], resolveAll:any, rejectAll:any) {
         let _volume = it[i];
         _volume.buildIndex(viewNS, designObject).then((dbHand:{}) => {
-        done++;
-        results[i] = dbHand;
-        logger.debug(`Done: ${done}/${total} [ i_index ${i} :: t_batch ${n}]`);
-        if (i + n < total)
-          goAsync(it, i + n, total, n/*, done*/, results, resolveAll, rejectAll);
-        if (done == total)
-          resolveAll(results);
-      });
+            done++;
+            results[i] = dbHand;
+            logger.debug(`Done: ${done}/${total} [ i_index ${i} :: t_batch ${n}]`);
+            if (i + n < total)
+                goAsync(it, i + n, total, n, results, resolveAll, rejectAll);
+            if (done == total)
+                resolveAll(results);
+        });
     };
   
     return new Promise((resolveAll, rejectAll) => {
       let work = []
       for (currIndex = 0 ; currIndex < (n < total ? n : total) ; currIndex++)
-        work.push(goAsync(endPointsRegistry, currIndex, total, n, /*done,*/ results, resolveAll, rejectAll));
-      //not working //Promise.all(work).then(()=>{resolveAll(results)});
+        work.push(goAsync(endPointsRegistry, currIndex, total, n, results, resolveAll, rejectAll));
     });
   }
 
-    /**
-     * Init connection to a couchDB daemon
-     * @param {string} dbRoot HTTP endpoint to couchDB server
-     * @param {t.credentials} userID admin user and password
-     * @returns {Promise}
-     * @memberof DBmanager
-     */
+/**
+ * Init connection to a couchDB daemon
+ * 
+ * @param {string} dbRoot HTTP endpoint to couchDB server
+ * @param {t.credentials} userID admin user and password
+ * @returns {Promise}
+ * @memberof DBmanager
+ */
 export async function connect(dbRoot:string, userID?:t.credentials):Promise<any>/*Promise<endPointStats>*/{
     ROOT = dbRoot;
     CREDS = userID;
@@ -114,10 +115,7 @@ export async function connect(dbRoot:string, userID?:t.credentials):Promise<any>
         PREFIX = `http://${CREDS.login}:${CREDS.pwd}@${dbRoot}`;
     try {
         let res = await fetch(PREFIX, {
-            method: 'GET'/*,
-        body: JSON.stringify(this.wrapBulk(packet)),
-        headers: { "Content-Type": "application/json" }
-        */
+            method: 'GET'
         });
         return res.json();
     } catch (e) {
@@ -125,13 +123,14 @@ export async function connect(dbRoot:string, userID?:t.credentials):Promise<any>
     }
 }
 
-    /**
-     * Get the a list of task matching 
-     * provided constraints. eg: a particular database
-     * @param {taskConstraint} constraints A set of constraints
-     * @returns {Promise<indexTask[]>} List of task
-     * @memberof DBmanager
-     */
+/**
+ * Get the a list of task matching 
+ * provided constraints. eg: a particular database
+ * 
+ * @param {taskConstraint} constraints A set of constraints
+ * @returns {Promise<indexTask[]>} List of task
+ * @memberof DBmanager
+ */
 export async function activeIndexTasks(constraints?:taskConstraint) {
     let _ = await activeTasks();
     const reDatabase = /shards\/[^\/]+\/(.+)\.[\d]+$/;
@@ -150,20 +149,19 @@ export async function activeIndexTasks(constraints?:taskConstraint) {
             });
     return rawTasks;
 }
-    /**
-     * Monitor the current active task of the couchDB process
-     * using the "/_active_tasks" endpoint
-     * @returns { Promise<{}> } An object with a single "task" key, whose value is a task array
-     * @memberof DBmanager
-     */
+
+/**
+ * Monitor the current active task of the couchDB process
+ * using the "/_active_tasks" endpoint
+ * 
+ * @returns { Promise<{}> } An object with a single "task" key, whose value is a task array
+ * @memberof DBmanager
+ */
 export async function activeTasks() {
     try {
         logger.silly(`${PREFIX + '/_active_tasks'}`);
         let res = await fetch(PREFIX + '/_active_tasks', {
-            method: 'GET'/*,
-        body: JSON.stringify(this.wrapBulk(packet)),
-        headers: { "Content-Type": "application/json" }
-        */
+            method: 'GET'
         });
         let _ = await res.text();
         return JSON.parse(`{ "tasks" : ${_}}`);
@@ -171,22 +169,30 @@ export async function activeTasks() {
         throw (e);
     }
 }
-    /**
-     * Execute a predefined "organism?key=[SPECIE]" view
-     * on all registered databases
-     * @param {string} ns The namespace of the view
-     * @param {string} specie The namespace of the specie 
-     * @returns {Promise<t.boundViewInterface[]>} List of resulting views, each wrapped with the database and view names
-     * @memberof DBmanager
-     */
+
+/**
+ * Execute a predefined "organism?key=[SPECIE]" view
+ * on all registered databases
+ * 
+ * @param {string} ns The namespace of the view
+ * @param {string} specie The namespace of the specie 
+ * @returns {Promise<t.boundViewInterface[]>} List of resulting views, each wrapped with the database and view names
+ * @memberof DBmanager
+ */
 export async function list(ns:string, specie:string):Promise<t.boundViewInterface[]> {
     const sp = specie.replace(' ','%20')
-    //let views:Promise<any>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd));
     let spKeyArray:t.viewInterface[] = await view(ns, `organisms?key="${sp}"`);
 
     return spKeyArray.map((v, i) => {return { vID : 'organisms', 'vNS' : ns, '_' : i, 'source' : endPointsRegistry[i].name, "data" : v };});
 }
 
+/**
+ * Ranks all species by their number of sgRNAs
+ * 
+ * @param {string} ns The namespace of the view
+ * @returns { {[k:string]:number|string}[] } A sorted List of Object storing specie sgRNA counts
+ * @memberof DBmanager
+ */
 export async function rank(ns:string):Promise<{[k:string]:number|string}[]> {
   
     let spKeyArray:t.viewInterface[] = await view(ns, `organisms`);
@@ -206,15 +212,15 @@ export async function rank(ns:string):Promise<{[k:string]:number|string}[]> {
                      });
 }
 
-    /**
-     * Update documents extracted from a view results using provided update function
-     *
-     * @param {t.boundViewInterface[]} inputs List of view results
-     * @param {t.nodePredicateFnType[]} _fn A document update function 
-     * @param {Boolean} sync An optional boolean to force indexation after update, default=true
-     * @returns { Promise<{}> } A report of the update process
-     * @memberof DBmanager
-     */
+/**
+ * Update documents extracted from a view results using provided update function
+ *
+ * @param {t.boundViewInterface[]} inputs List of view results
+ * @param {t.nodePredicateFnType[]} _fn A document update function 
+ * @param {Boolean} sync An optional boolean to force indexation after update, default=true
+ * @returns { Promise<{}> } A report of the update process
+ * @memberof DBmanager
+ */
 export async function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateFnType, sync=true) {
     const resp:{[k:string]: any} = {};
     for (let boundView of inputs) {
@@ -261,11 +267,23 @@ export async function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateF
     // Log total deletion and volumes report
 }
 
+/**
+ * Perform a view on a set of databases
+ *
+ * @param {string} ns The view namespace
+ * @param {string} cmd The view (and its evetual parameters) execution command 
+ * @returns { Promise<t.viewInterface[]> } A collection of the resulting views
+ * @memberof DBmanager
+ */
 export function view(ns:string, cmd:string):Promise<t.viewInterface[]> {
     let views:Promise<t.viewInterface>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd));
     return Promise.all(views);
 }
 
+/**
+ * Display the monitoring of the active tasks of the couchDB process
+ * 
+ */
 export async function watch() {
     logger.info("Watching Tasks")
     let n = 0;
@@ -286,6 +304,10 @@ export async function watch() {
     }
 }
 
+/**
+ * Perform the monitoring of the active tasks of the couchDB process
+ * 
+ */
 export function _watch() {
     let asyncIntervals:Boolean[] = [];
     const runAsyncInterval = async (cb:()=>Promise<any>, interval:number, intervalIndex:number) => {
@@ -313,16 +335,6 @@ export function _watch() {
             asyncIntervals[intervalIndex] = false;
         }
     };
-
-    /*setAsyncInterval(async () => {
-        console.log('start');
-        const promise = new Promise((resolve) => {
-          setTimeout(() => { x += 1; resolve(`${x} all done`);}, 3000);
-        });
-        await promise;
-        console.log('end');
-      }, 1000);
-      */
      setAsyncInterval(activeTasks,
         1000);
 }

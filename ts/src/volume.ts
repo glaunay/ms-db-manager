@@ -106,6 +106,7 @@ export class Volume {
      * Update the content of the prodided data object with revision attribute of
      * the document found at the provided enpoint.
      * Passed data will be modified.
+     * 
      * @param {string} docEndPoint currently stored document location
      * @param { {[k:string]:string} } data The object to modify for further insertion
      * @memberof Volume
@@ -129,6 +130,7 @@ export class Volume {
     }
     /**
      * Wait for the completion of all database indexation processes   
+     * 
      * @memberof Volume
      */
     async waitForIndexation(){
@@ -177,7 +179,7 @@ export class Volume {
     /**
      * Trigger the indexation of the first found view under provided namespace
      * Alternatively, a design document defining new view(s) can be provided.
-     *  GL : Overwriting ??
+     * 
      * @param {Object} designObject couchDB design document
      * @param {string} ns The namespace under which the view is stored
      * @param {string} ns The name of the view
@@ -272,8 +274,16 @@ export class Volume {
             throw (e);
         }
     }
-    // docIDs will be consumed
-    // WE need TypeGuard on input, at least to detect error
+    /**
+     * Iterate through a collection of requested documents
+     * Warning: the provided list will be consumed
+     * 
+     * @param {string[]} docIDs The list of document identifiers to retrieve
+     * @param {number} slice The number of document to query at each request. Optional, defaumt=500
+     * @returns {AsyncGenerator<t.couchBulkResponse>} The fetched documents.
+     * @memberof Volume
+     */
+    // GL - docIDs will be consumed. We need TypeGuard on input, at least to detect error
     async * getBulkDoc(docIDs:string[], slice:number=500) : AsyncGenerator<t.couchBulkResponse> {
         let i  = 0;
         while (docIDs.length > 0) {
@@ -296,6 +306,13 @@ export class Volume {
             }
         }
     }
+    /**
+     * Request a single document
+     * 
+     * @param {string[]} docID The identifier of document to retrieve
+     * @returns {Promise<t.documentInterface>} The fetched document.
+     * @memberof Volume
+     */
     async getDoc(docID:string):Promise<t.documentInterface> {
         let json:any;
         const url = this.endpoint + `/${docID}`;      
@@ -313,14 +330,25 @@ export class Volume {
             throw new Error(`${this.name} failed to get document at ${docID}`);
         }
         throw new Error (`Irregular document pulled ${inspect(json)}`);
-    } // Finish this
-    async updateBulk(keys:string[], _fn:t.nodePredicateFnType, syncSpecs?:{[k:string]: string}) {
+    } 
+    /**
+     * Wrap the update a collection of documents, by:
+     *  -Querying their initial state
+     *  -Inserting them after modification
+     * 
+     * @param {string[]} docIDs The identifier of document to retrieve
+     * @param {t.nodePredicateFnType} _fn A function to modify document state
+     * @param { {[k:string]: string} } syncSpecs Object specifying a view to re-index, Optional.
+     * @returns {Promise<t.updateBulkReport>} Object storing couchDB update reports.
+     * @memberof Volume
+     */
+    async updateBulk(docIDs:string[], _fn:t.nodePredicateFnType, syncSpecs?:{[k:string]: string}) {
 
         const _:t.updateBulkReport = {
             'updated' : [], 'deleted' : []
         }
         // Syncing at the slice level   
-        for await (const couchBulkResp of this.getBulkDoc(keys)) { 
+        for await (const couchBulkResp of this.getBulkDoc(docIDs)) { 
             const toDel:t.documentInterface[]  = []
             const toKeep:t.documentInterface[] = []
             for( let doc of this._updateBulk(couchBulkResp, _fn) ) {
@@ -340,27 +368,36 @@ export class Volume {
             }
         }  
         return _;
-    }   
+    }
+
+    /**
+     * Perform the modification of a collection of documents
+     * 
+     * @param {t.couchBulkResponse[]} stuff The collection of document to modify
+     * @param {t.nodePredicateFnType} _fn A function to modify document state
+     * @param { Boolean }  allowEmptyObject Keep or delete documents made empty through modification
+     * @returns { t.documentInterface[]} The collection of modified documents
+     * @memberof Volume
+     */
     _updateBulk(stuff:t.couchBulkResponse, fn:t.nodePredicateFnType, allowEmptyObject=true): t.documentInterface[] {
-       /*
-        const filterInject = (acc:t.documentInterface[], d:t.couchBulkResponseChunk) => {
-            return [...acc, ...d.docs.map((e:t.couchBulkResponseItem)=> this.filterDoc(e.ok, fn, allowEmptyObject) )]
-            //return d.docs.map((e:t.couchBulkResponseItem)=> this.filterDoc(e.ok, fn, allowEmptyObject) )
-        }
-        //let x = stuff.results.reduce(filterInject, []);
-        */
         let _:(t.documentInterface|undefined)[] = [];
         stuff.results.forEach( (result:t.couchBulkResponseChunk)  => {
             _ = [..._, ...result.docs.map((e:t.couchBulkResponseItem)=> this.updateDoc(e.ok, fn, allowEmptyObject) )];
         });
         return <t.documentInterface[]>_.filter((e:t.documentInterface|undefined) => e);
     }
-    // Filter the content of a document by applying predicate function to all its key,value pair 
+
+    /**
+     * Perform the modification of a single document
+     * 
+     * @param {t.documentInterface} srcDoc The document to modify
+     * @param {t.nodePredicateFnType} fn A function to modify document state
+     * @param { Boolean }  allowEmptyObject Keep or delete documents made empty through modification
+     * @returns { t.documentInterface|undefined} The document or undefined if allowEmptyObject was false and document empty
+     * @memberof Volume
+     */
+    // Filter the content of a document by applying pseudo-predicate function to all its key,value pair 
     // CPU bound may have to spawn it if large document
-    async filter(docID:string, fn:t.nodePredicateFnType, allowEmptyObject=true) {
-        const srcDoc = await this.getDoc(docID);
-        const tgtDoc:t.documentInterface|undefined = this.updateDoc(srcDoc, fn, allowEmptyObject);
-    }
     updateDoc(srcDoc:t.documentInterface, fn:t.nodePredicateFnType, allowEmptyObject=true):t.documentInterface|undefined {
         let tgtDoc:t.documentInterface = {
             "_id": srcDoc._id,
@@ -395,7 +432,6 @@ export class Volume {
 
             return node;
         }
-        
         for (let key of Object.keys(srcDoc).filter((k:string) => ! k.startsWith('_'))) {
             const _ = _fn(key, srcDoc[key]);
             if(_)
@@ -404,15 +440,11 @@ export class Volume {
         logger.silly(`filterDoc : \n${inspect(srcDoc)}\nbecame\n${inspect(tgtDoc)}`);
         return tgtDoc;
     }
-    
+
+/*
+    async filter(docID:string, fn:t.nodePredicateFnType, allowEmptyObject=true) {
+        const srcDoc = await this.getDoc(docID);
+        const tgtDoc:t.documentInterface|undefined = this.updateDoc(srcDoc, fn, allowEmptyObject);
+    }
+  */  
 }
-
-//  TROP LONG !!
-//curl -X GET 'localhost:5984/crispr_rc01_v35/_design/vNS/_view/organisms?key="Komagataeibacter xylinus E25 GCF_000550765.1"'
-
-//DELETE AGGTTTTGATTTGTAGTTTAGGG
-
-//curl 'localhost:5984/crispr_v10/_design/by_org/_view/organisms?key="Candidatus%20Portiera%20aleyrodidarum%20BT-B-HRs%20GCF_000300075.1"'
-//curl -X PUT wh_agent:couch@localhost:5984/crispr_v10/_design/by_org -H "Content-Type : application/json" -d @work/DVL/JS/ms-db-manager/views/byOrganism.json
-//curl -X DELETE 'localhost:5984/crispr_v10/AGGTTTTGATTTGTAGTTTAGGG?rev=4-f3551a9b1fa52867a7ea6305ac494f32'
-//-->{"ok":true,"id":"AGGTTTTGATTTGTAGTTTAGGG","rev":"5-008d91c666168f62996c296cbc0b4cce"}

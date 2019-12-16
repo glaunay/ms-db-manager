@@ -6,6 +6,7 @@
     "maxNodeModuleJsDepth" : 10,                /* Required allowJS option. Authorize <number> node modules call. */
     "lib": [
         "ESNext",
+        "ESNext.AsyncIterable"
     ],                             /* Specify library files to be included in the compilation. */
     "allowJs": true,                       /* Allow javascript files to be compiled. */
     // "checkJs": true,                       /* Report errors in .js files. */
