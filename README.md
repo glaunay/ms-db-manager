@@ -4,6 +4,14 @@
 
 ## Install
 
+```sh
+https://github.com/glaunay/ms-db-manager
+cd ms-db-manager
+npm install
+tsc
+cd build
+```
+
 ### Setting up the views
 
 #### Listing specie sgRNAs associations
