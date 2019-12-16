@@ -219,9 +219,9 @@ export class Volume {
         let url = this.endpoint + `/_design/${ns}/_view/${cmd}`;      
         if(limit)
             if(cmd.indexOf('?') >= 0)
-                url += '&limit=${limit}'
+                url += `&limit=${limit}`
             else
-                url += '?limit=${limit}'
+                url += `?limit=${limit}`
         
     
         logger.debug(`[view]GET:${url}`);
