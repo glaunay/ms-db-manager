@@ -1,0 +1,6 @@
+{
+  "login": "wh_agent",
+  "password": "couch",
+  "adress": "localhost",
+  "port": 5984
+}

@@ -7,6 +7,13 @@ import fs = require('fs');
 import { timeIt } from "./utils";
 import * as t from "./cType";
 
+interface tParameters {
+  "login" : string,
+  "password" : string,
+  "adress": string,
+  "port" : number
+}
+
 program
   .option("-c, --config <path>", "Load config file")
   .option("-v, --verbosity <logLevel>", "Set log level (debug, info, success, warning, error, critical)")
@@ -34,7 +41,17 @@ logger.info("\t\t***** Starting CRISPR databases manager MicroService *****\n");
 
 (async () => {
   try {
-    let res = await DBmanager.connect('localhost:5984', {'login' : "wh_agent", 'pwd' : "couch"});
+
+    let parameters:tParameters = {
+      "login" : "default",
+      "password" : "default",
+      "adress": "localhost",
+      "port" : 5984
+    };
+    parameters = program.config ? await parseConfig(program.config, parameters) : parameters;
+    
+    let res = await DBmanager.connect(`${parameters.adress}:${parameters.port}`,
+                                       {'login' : parameters.login, 'pwd' : parameters.password});
     logger.debug(`${inspect(res)}`);
     } catch (e) {
       logger.fatal(e);
@@ -50,6 +67,8 @@ logger.info("\t\t***** Starting CRISPR databases manager MicroService *****\n");
     process.exit(0);
   }
 
+
+  
   const _doc = program.design ? await parseDesign(program.design) : undefined;
   const dbTarget = program.target
   const viewNS = program.namespace;
@@ -184,6 +203,30 @@ function parseDesign(filePath:string):Promise<{}>{
       try {
         const data = JSON.parse(fileContents)
         resolve(data);
+      } catch(err) {
+        throw new Error(err);
+      }
+    })
+  });
+}
+
+function parseConfig (filePath:string, _default:tParameters):Promise<tParameters>{
+
+  return new Promise((resolve, reject) => {
+    fs.readFile(filePath, 'utf8', (err, fileContents) => {
+      if (err) {
+        console.error(err)
+        return
+      }
+      try {
+        const data = JSON.parse(fileContents)
+        for (let k in  _default) {
+          if (data.hasOwnProperty(k))
+            //@ts-ignore
+            _default[k] = data[k];
+        }
+        logger.debug(`Load configuration:\n${inspect(_default)}`);
+        resolve(_default);
       } catch(err) {
         throw new Error(err);
       }
