@@ -8,7 +8,7 @@
 
 #### Listing specie sgRNAs associations
 
-The views folder provides the **byOrganisms.json** [couchDB design document](https://docs.couchdb.org/en/stable/ddocs/index.html) file. It provides the specifics for a couchDB view named *organisms*
+The views folder provides the **byOrganisms.json** [couchDB design document](https://docs.couchdb.org/en/stable/ddocs/index.html) file. This file gives the specifics for a couchDB view named *organisms*
 
 ```json
 {
@@ -45,18 +45,20 @@ would return
 
 #### Indexing
 
-You provide a setup a view the following way
+You setup a view over a range of databases the following way
+
 ```sh
 node index.js --target '[RANGE_EXPR]' --design  [DESIGN_DOCUMENT]--namespace [DESIGN_FOLDER]
 ```
 
 Where,
 
-All databases will be checked for the availability of the provided view. It may trigger the indexing of several databases which can take time.
-
 * `--target [RANGE_EXPR]` is a pseudo-regular expression with number interpolation capability
 * `--design [DESIGN_DOCUMENT]` is the file path to write the rankings, default='jsonOut'
 * `--namespace [DESIGN_FOLDER]` is the folder where couchDB will store the document. Optional, default="vNS"
+
+
+All databases will be checked for the availability of the provided view. It may trigger the indexing of several databases which can take time.
 
 ##### Example
 
@@ -80,7 +82,7 @@ node index.js --target [RANGE_EXPR] --rank [JSON_OUPUT]
 where,
 
 * `--target [RANGE_EXPR]` is a pseudo-regular expression with number interpolation capability
-* `--rank [JSON_OUPUT]` is the file path to write the rankings, default='jsonOut'
+* `--rank [JSON_OUPUT]` is the file path to write the rankings
 
 ##### Example
 
@@ -88,7 +90,7 @@ where,
 node index.js --target 'crispr_rc01_v3[7-8]' --rank rankings.json
 ```
 
-will produce a `rankings.json` file with the following type of content
+will produce a `rankings.json` file with the following content type
 
 ```json
 {"ranks":[
@@ -110,10 +112,13 @@ where,
 * `--target [RANGE_EXPR]` is a pseudo-regular expression with number interpolation capability
 * `--find [SPECIE_NAME]` is a valid complete specie name
 
+##### Example
+
 ```sh
 node index.js --target 'crispr_rc01_v3[7-8]' --find 'Deinococcus actinosclerus GCF_001507665.1'
 ```
-will produce a `Deinococcus actinosclerus GCF_001507665.1.json` file with the following type of content,
+
+will produce a `Deinococcus actinosclerus GCF_001507665.1.json` file with the following content type,
 
 ```json
 {"find":[
@@ -141,6 +146,7 @@ node index.js --target [RANGE_EXPR] --remove [SPECIE_NAME]
 ```
 
 where,
+
 * `--target [RANGE_EXPR]` is a pseudo-regular expression with number interpolation capability
 * `--remove [SPECIE_NAME]` is a valid complete specie name
 
