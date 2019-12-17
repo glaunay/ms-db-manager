@@ -206,6 +206,8 @@ export class Volume {
         }
     }
 
+    //async getView (ns:string, cmd:string, limit?:number):Promise<View> {
+
     /**
      * Request a view of the database
      *

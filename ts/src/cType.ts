@@ -40,6 +40,13 @@ export interface viewInterface {
     offset : number,
     rows : {[k:string]:any}[]
 }
+export function isViewInterface(v:any) {
+    for ( let k in v ) {
+        if (k != 'total_rows' && k != 'offset' && k != 'rows')
+            return false; 
+    }
+    return true;
+}
 
 export function isEmptyViewInterface(v:viewInterface) {
     return v.rows.length == 0;

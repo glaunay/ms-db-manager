@@ -62,6 +62,7 @@
     "./ts/src/index.ts",
     "./ts/src/volume.ts",
     "./ts/src/manager.ts",
-    "./ts/src/test.ts"
+    "./ts/src/test.ts",
+    "./ts/src/index_test"
   ]
 }
