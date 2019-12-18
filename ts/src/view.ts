@@ -111,7 +111,7 @@ async function viewFetchUnwrap(url:string) {
 }
 
 export class View {
-  step:number = 5 
+  step:number = 5000 
   length?:number
   endPoint:string
   parameters:viewParameters
