@@ -1,10 +1,15 @@
 import { logger } from "./logger";
 
+/**
+ * Compute the time passed from a provided process.hrtime() results
+ * 
+ * @param {[number, number]} time A [second, nanosecond] tuple
+ * @returns {[number, number, number, number]} A [hour, minute, second, nanosecond] duration array
+ */
 export function timeIt(time:[number, number]):[number, number, number, number] {
     const diff = process.hrtime(time);
     const h    = diff[0] === 0 ? 0 : Math.floor(diff[0] / 3600);
     const min  = diff[0] === 0 ? 0 : Math.floor(diff[0] / 60);   
-    
     return [ h, min, diff[0], diff[1] ];
 }
 

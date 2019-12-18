@@ -34,12 +34,17 @@ start_key_doc_id (string) – Alias for startkey_docid param
 update (string) – Whether or not the view in question should be updated prior to responding to the user. Supported values: true, false, lazy. Default is true.
 update_seq (boolean) – Whether to include in the response an update_seq value indicating the sequence id of the database the view reflects. Default is false.
 */
-interface viewParameters {
+export interface viewParameters {
   descending?:Boolean,
   startkey?:string
   limit?:number
   skip?:number
   key?:string
+}
+
+interface viewDatum {
+    key : string,
+    id  : string
 }
 
 function isViewParameters(data:{[k:string]:any}):Boolean{
@@ -51,11 +56,15 @@ function isViewParameters(data:{[k:string]:any}):Boolean{
             "startkey_docid" : 'string'
   };
 
-  for (let k in _){
-    if (! data.hasOwnProperty(k) )
-      return false;   
-    if( typeof (data[k]) != _[k] )
-      return false;
+  for (let k in data){
+    if (! _.hasOwnProperty(k) ) {
+        logger.debug(`isViewParameters: "${k}" is not a registred key`);
+        return false;   
+    }
+    if( typeof (data[k]) != _[k] ) {
+        logger.debug(`isViewParameters: "${k}" has wrong data type ${typeof (data[k])} instead of ${_[k]}`);
+        return false;
+    }
   }
   return true;
 }
@@ -69,9 +78,9 @@ function urlParameters(data:viewParameters|undefined):string {
   return '?' + Object.keys(data).map((k) => `${k}=${data[k]}`).join('&');
 }
 
-
-export async function getView(url:string) {
-  const v = new View(url);
+// Sufficeint to trigger indexing ?
+export async function getView(url:string, p?:viewParameters) {
+  const v = new View(url, p);
   await v._init();
   return v;
 }
@@ -82,12 +91,14 @@ async function viewFetchUnwrap(url:string) {
     method: 'GET'
   });
   let data = await res.json();
-  if (!t.isViewInterface(data))
+  if(t.isCouchNotFound(data))
+    throw new Error(`view::${url} not found`);
+  if (!t.isViewDocInterface(data))
     throw new Error(`Non valid view data ${inspect(data)}`);
   return data;
 }
 
-class View {
+export class View {
   step:number = 5000 
   length?:number
   endPoint:string
@@ -134,6 +145,7 @@ class View {
     }
   }
   // Need to implement treatment of skip parameter, with initial fetch
+  // Shoulb be promptly reiterable
   async * iteratorQuick(): AsyncGenerator<any>{
    
     let calls = 0;
@@ -177,7 +189,7 @@ class View {
       //logger.info(`Packet(${data.rows.length}) First Item, Second Item, LastItem\n${inspect(data.rows[0])}\n${inspect(data.rows[1])}${inspect(data.rows[data.rows.length -1])}`);
       //logger.debug(`iterator${inspect(data.rows)}:`);
       for (let datum of data.rows)
-        yield datum;
+        yield datum as viewDatum;
       // We set last key as first to fetch and ignore it w/ skip = 1
       const lastItem = data.rows[data.rows.length -1];
       _bufferParameters.startkey = `"${lastItem.key}"`;
@@ -186,5 +198,12 @@ class View {
      
       currentStartPos += _bufferParameters.limit
     }
+  }
+  async mapQuick( fn:(d:viewDatum)=>any ): Promise<any[]> {
+      let results:any[] = [];
+      for await (const vDatum of this.iteratorQuick()) {
+          results.push(fn(vDatum));
+      }
+      return results;
   }
 }

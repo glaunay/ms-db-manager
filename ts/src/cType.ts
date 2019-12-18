@@ -1,6 +1,10 @@
 import { logger } from "./logger";
 import {inspect} from "util";
+export  {View, viewParameters} from "./view";
 
+import  {View} from "./view";
+
+//export type View = View;
 export interface couchBulkQueryItem {
    id   : string,
    rev ?: string,
@@ -35,33 +39,35 @@ export interface updateBulkReport {
     updated : any[], // Should be type as _bulk_docs response
     deleted : any[] //https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
 }
-export interface viewInterface {
+
+export interface viewDocInterface {
     total_rows : number,
     offset : number,
     rows : {[k:string]:any}[]
 }
-export function isViewInterface(v:any) {
+export function isViewDocInterface(v:any) {
     for ( let k in v ) {
         if (k != 'total_rows' && k != 'offset' && k != 'rows')
             return false; 
     }
     return true;
 }
-
+/*
 export function isEmptyViewInterface(v:viewInterface) {
     return v.rows.length == 0;
 }
+*/
 
 export interface boundViewInterface {
     _ : number,
     vNS : string,
     vID : string,
     source : string,
-    data : viewInterface
+    view : View
 }
 
 export function isEmptyBoundViewInterface(v:boundViewInterface) {
-    return isEmptyViewInterface(v.data);
+    return v.view.length == 0;
 }
 
 export interface delConstraints {

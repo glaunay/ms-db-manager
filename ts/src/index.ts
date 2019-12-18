@@ -79,7 +79,7 @@ logger.info("\t\t***** Starting CRISPR databases manager MicroService *****\n");
     const summary = await DBmanager.registerAllBatch(dbTarget, viewNS, _doc, 2);
     logger.debug(inspect(summary));
     const t2 = timeIt(t1);
-    logger.success(`Total buildIndex done in ${t2[0]}H:${t2[1]}M:${t2[0]}S`);
+    logger.success(`Total buildIndex done in ${t2[0]}H:${t2[1]}M:${t2[2]}S`);
   } catch(e) {
     logger.fatal(`${e}`);
   }
@@ -102,9 +102,13 @@ logger.info("\t\t***** Starting CRISPR databases manager MicroService *****\n");
  * @param {string} jsonOutputFile The file to write rankings to.
  */
 async function rankSpecies(viewNS:string, jsonOutputFile:string) {
+  const t1 = process.hrtime();
   const report = await DBmanager.rank(viewNS);
   logger.debug(inspect(report, {depth:6}));
-  logger.info(`ranks Species: Total ranked  is ${report.length} from ${report[0]} to ${report[report.length -1 ]} sgRNAs`)
+  const t2 = timeIt(t1);
+  
+  logger.success(`ranks Species done in ${t2[0]}H:${t2[1]}M:${t2[2]}S`);
+  logger.info(`ranks Species: Total ranked  is ${report.length} from ${report[0].count} to ${report[report.length -1 ].count} sgRNAs`)
   fs.writeFile(jsonOutputFile, JSON.stringify({ 'ranks' : report } ), (err)=> {
     if (err) throw err;
     logger.debug(`Ranks written to ${jsonOutputFile}`);
@@ -119,20 +123,24 @@ async function rankSpecies(viewNS:string, jsonOutputFile:string) {
  */
 async function listSpecie(specie:string, ns:string) {
   let res;
+  const t1 = process.hrtime();
   try {
     res = await DBmanager.list(ns, specie);
   } catch (e){
     throw new Error(`listSpecie failed ${e}`);
   }
-  const total = res.reduce( (acc, cur:t.boundViewInterface)=>  acc + cur.data.rows.length , 0);
-  const max   = res.reduce( (acc, cur:t.boundViewInterface)=>  acc > cur.data.rows.length ? acc : cur.data.rows.length , 0);
-  const min   = res.reduce( (acc, cur:t.boundViewInterface)=>  acc < cur.data.rows.length  ? acc : cur.data.rows.length , max);
+  const total = res.reduce( (acc, cur:t.boundViewInterface)=>  acc + <number>cur.view.length, 0);
+  const max   = res.reduce( (acc, cur:t.boundViewInterface)=>  acc > <number>cur.view.length ? acc : <number>cur.view.length , 0);
+  const min   = res.reduce( (acc, cur:t.boundViewInterface)=>  acc < <number>cur.view.length  ? acc : <number>cur.view.length , max);
   
   fs.writeFile(`${specie}.json`, JSON.stringify({ 'find' : res } ), (err)=> {
     if (err) throw err;
     logger.debug(`Ranks written to ${specie}.json`);
   });
-  logger.success(`listSpecie:A total of ${total} sgRNA were listed in ${res.length} volumes, (min, max) = (${min}, ${max})`);
+  const t2 = timeIt(t1);
+
+  logger.success(`listSpecie done in ${t2[0]}H:${t2[1]}M:${t2[2]}S`);
+  logger.success(`Found a total of ${total} [perVolume: min=${min}, max=${max}] sgRNAs occurences of ${specie}`)
   return res;
 }
 

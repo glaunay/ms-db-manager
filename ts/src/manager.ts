@@ -180,10 +180,10 @@ export async function activeTasks() {
  * @memberof DBmanager
  */
 export async function list(ns:string, specie:string):Promise<t.boundViewInterface[]> {
-    const sp = specie.replace(' ','%20')
-    let spKeyArray:t.viewInterface[] = await view(ns, `organisms?key="${sp}"`);
+    const sp = specie.replace(/ /g,'%20')
+    let spKeyArray:t.View[] = await view(ns, 'organisms', {"key":sp});
 
-    return spKeyArray.map((v, i) => {return { vID : 'organisms', 'vNS' : ns, '_' : i, 'source' : endPointsRegistry[i].name, "data" : v };});
+    return spKeyArray.map((v, i) => {return { vID : 'organisms', 'vNS' : ns, '_' : i, 'source' : endPointsRegistry[i].name, "view" : v };});
 }
 
 /**
@@ -195,16 +195,17 @@ export async function list(ns:string, specie:string):Promise<t.boundViewInterfac
  */
 export async function rank(ns:string):Promise<{[k:string]:number|string}[]> {
   
-    let spKeyArray:t.viewInterface[] = await view(ns, `organisms`);
+    let spKeyArray:t.View[] = await view(ns, `organisms`);
     let _:{[k:string]:number} = {};
     logger.debug(`DDD${spKeyArray}`);
-    spKeyArray.forEach((v:t.viewInterface, i) => {
-        v.rows.forEach((d:any) => {
-            if ( ! _.hasOwnProperty(d.key) )
-                _[d.key] = 0;
-            _[d.key]++;
-        });
-    });
+    for (const v of spKeyArray) {
+        for await ( const vDatum of v.iteratorQuick() ) {
+            if ( ! _.hasOwnProperty(vDatum.key) )
+                _[vDatum.key] = 0;
+            _[vDatum.key]++;
+        }
+    }
+    logger.info("####");
     return Object.keys(_).map((k:string) => { return { 'specie' : k, 'count' : _[k]}; })
         .sort((a,b)=>{ if (a.count < b.count) return -1;
                        if (a.count < b.count) return 1;
@@ -227,7 +228,7 @@ export async function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateF
         if(t.isEmptyBoundViewInterface(boundView))
             continue;
         const oVol:vLib.Volume = oEndPointsRegistry[boundView.source];
-        let keys = boundView.data.rows.map((d:any) => d.id);
+        let keys = await boundView.view.mapQuick((d:any) => d.id);
         const syncSpecs = {
             'vNS' : boundView.vNS,
             'vID' : boundView.vID
@@ -275,8 +276,8 @@ export async function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateF
  * @returns { Promise<t.viewInterface[]> } A collection of the resulting views
  * @memberof DBmanager
  */
-export function view(ns:string, cmd:string):Promise<t.viewInterface[]> {
-    let views:Promise<t.viewInterface>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd));
+export function view(ns:string, cmd:string):Promise<t.View[]> {
+    let views:Promise<t.View>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd));
     return Promise.all(views);
 }
 

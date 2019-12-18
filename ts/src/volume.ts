@@ -5,6 +5,7 @@ import fetch from "node-fetch";
 import { inspect } from "util";
 import { isObject, isEmptyObject } from './utils';
 import { timeIt } from './utils';
+import {getView} from './view';
 
 /**
 * Object-oriented API for a single couchDB database
@@ -194,9 +195,8 @@ export class Volume {
             if (designObject)
                 await this.setIndex(designObject, viewNS);
             const triggerKey = await this.defaultViewKey(viewNS);
-            logger.debug(`Following key will be used to trigger index building ${triggerKey}`);
-            
-            let json = await this.view(viewNS, triggerKey, 5); // Only display the 5 first records to avoid clutering 
+            logger.debug(`Following key will be used to trigger index building "${triggerKey}"`);
+            let json = await this.view(viewNS, triggerKey);
             const _time = timeIt(time);
             logger.success(`${this.name} buildIndex in ${_time[0]}H:${_time[1]}M:${_time[0]}S`);
 
@@ -214,10 +214,24 @@ export class Volume {
      * @param {Object} designObject couchDB design document
      * @param {string} ns The namespace under which the view is stored
      * @param {string} ns The name of the view
-     * @returns {Promise<t.viewInterface>} The view object
+     * @returns {Promise<t.View>} The view object
      * @memberof Volume
      */
-    async view (ns:string, cmd:string, limit?:number):Promise<t.viewInterface> { // Should typeguard async json response
+    async view(ns:string, vName:string, vParam?:t.viewParameters):Promise<t.View> {     
+        const url = this.endpoint + `/_design/${ns}/_view/${vName}`;
+        const _vParam:t.viewParameters = vParam ? vParam : { "skip" : 0 } ;
+        
+        logger.debug(`${this.name}.view :: ${url} with ${inspect(_vParam)}`);
+        try {
+            const viewObj:t.View = await getView(url, _vParam);
+            return viewObj;
+        } catch (e) {
+            logger.fatal(e);
+            throw(e);
+        }
+    }
+    /*
+    async _view (ns:string, cmd:string, limit?:number):Promise<t.viewInterface> { 
         let url = this.endpoint + `/_design/${ns}/_view/${cmd}`;      
         if(limit)
             if(cmd.indexOf('?') >= 0)
@@ -251,7 +265,7 @@ export class Volume {
             throw(e);
         }
     }
-    
+    */
     /**
      * Insert a collection of documents in the database
      *
