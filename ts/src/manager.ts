@@ -180,8 +180,7 @@ export async function activeTasks() {
  * @memberof DBmanager
  */
 export async function list(ns:string, specie:string):Promise<t.boundViewInterface[]> {
-    const sp = specie.replace(/ /g,'%20')
-    let spKeyArray:t.View[] = await view(ns, 'organisms', {"key":sp});
+    let spKeyArray:t.View[] = await view(ns, 'organisms', {"key":specie});
 
     return spKeyArray.map((v, i) => {return { vID : 'organisms', 'vNS' : ns, '_' : i, 'source' : endPointsRegistry[i].name, "view" : v };});
 }
@@ -276,8 +275,8 @@ export async function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateF
  * @returns { Promise<t.viewInterface[]> } A collection of the resulting views
  * @memberof DBmanager
  */
-export function view(ns:string, cmd:string):Promise<t.View[]> {
-    let views:Promise<t.View>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd));
+export function view(ns:string, cmd:string, p?:t.viewParameters):Promise<t.View[]> {
+    let views:Promise<t.View>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd, p));
     return Promise.all(views);
 }
 

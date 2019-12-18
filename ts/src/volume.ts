@@ -226,8 +226,15 @@ export class Volume {
             const viewObj:t.View = await getView(url, _vParam);
             return viewObj;
         } catch (e) {
-            logger.fatal(e);
-            throw(e);
+            if (isObject(e) && t.isCouchTimeOut(e)) {
+                logger.warn(`view needs indexation [${url}]`);
+                await this.waitForIndexation();
+                const viewObj:t.View = await getView(url, _vParam);
+                return viewObj;
+            } else {
+                logger.fatal(e);
+                throw(e);
+            }
         }
     }
     /*

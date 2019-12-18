@@ -1,15 +1,15 @@
-import {getView} from "./test";
+import {getView} from "./view";
 import { logger, setLogLevel, setFile, logLvl } from "./logger";
 import {inspect} from 'util';
 import {timeIt} from './utils';
 
-setLogLevel('info');
+setLogLevel('debug');
 const url = 'http://localhost:5984/crispr_rc01_v35/_design/vNS/_view/organisms';
 
 (async () => {
     const time  = process.hrtime();
     const keySet = new Set([]);
-    const v = await getView(url);
+    const v = await getView(url, {"key" : "Candidatus Portiera aleyrodidarum BT-B-HRs GCF_000300075.1"});
     logger.info(v.length)
     let i=0;
     for await ( const datum of v.iteratorQuick() ) {            

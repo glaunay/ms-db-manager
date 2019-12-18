@@ -1,5 +1,5 @@
 import fetch from "node-fetch";
-import {inspect} from "util";
+import {inspect, isObject} from "util";
 import { logger } from "./logger";
 import * as t from "./cType";
 
@@ -75,31 +75,43 @@ function urlParameters(data:viewParameters|undefined):string {
   if (Object.keys(data).length == 0) 
     return '';
   //@ts-ignore
-  return '?' + Object.keys(data).map((k) => `${k}=${data[k]}`).join('&');
+  return '?' + Object.keys(data).map((k:string) => {
+    if (k === 'key')
+        return `${k}="${(data[k] as string).replace(/ /g, '%20')}"`;
+    return `${k}=${(data as any)[k]}`;
+  }).join('&');
 }
 
 // Sufficeint to trigger indexing ?
 export async function getView(url:string, p?:viewParameters) {
   const v = new View(url, p);
-  await v._init();
+  try {
+    await v._init();
+  } catch(e) {
+    if (isObject(e) && t.isCouchTimeOut(e))
+        throw (e);
+  }
   return v;
 }
 
 async function viewFetchUnwrap(url:string) {
-  logger.debug(`View.iterator:[GET] ${url}`);
-  let res = await fetch(url, {
-    method: 'GET'
-  });
-  let data = await res.json();
-  if(t.isCouchNotFound(data))
-    throw new Error(`view::${url} not found`);
-  if (!t.isViewDocInterface(data))
-    throw new Error(`Non valid view data ${inspect(data)}`);
-  return data;
+    logger.debug(`View.iterator:[GET] ${url}`);
+    let res = await fetch(url, {
+        method: 'GET'
+    });
+    let data = await res.json();
+    if(t.isCouchNotFound(data))
+        throw new Error(`view::${url} not found`);
+    if (t.isCouchTimeOut(data))
+        throw(data);
+    if (!t.isViewDocInterface(data))
+        throw new Error(`Non valid view data ${inspect(data)}`);
+
+    return data;
 }
 
 export class View {
-  step:number = 5000 
+  step:number = 5 
   length?:number
   endPoint:string
   parameters:viewParameters
@@ -116,15 +128,24 @@ export class View {
 
     this.endPoint = nativeUrl;
   }
-  async _init() {
+  async _init() {// If parameter specify a key we have to compute length through exhasustiv iteration
     let url = `${this.endPoint}`
-    if (this.parameters)
-      url += `${urlParameters(this.parameters)}&limit=0`;
-    else
-      url += '?limit=0';
-    logger.debug(`view.init::${url}`);
-    let data = await viewFetchUnwrap(url);
-    this.length = data.total_rows;
+    if (this.parameters) 
+        if (this.parameters.hasOwnProperty('key')) {
+            this.length = 0;
+            for await (const _ of this.iteratorQuick()) 
+                this.length++;
+            return;
+        }
+    url += '?limit=0';
+    try {
+        const _ = await viewFetchUnwrap(url);
+        
+    } catch (e) {
+        if (isObject(e) && t.isCouchTimeOut(e))
+            throw (e);
+    }
+    this.length = _.total_rows;
   }
 
   async * iteratorSlow(): AsyncGenerator<any>{
@@ -148,7 +169,7 @@ export class View {
   // Shoulb be promptly reiterable
   async * iteratorQuick(): AsyncGenerator<any>{
    
-    let calls = 0;
+    let calls = 1;
     // We get an initial start key here in case of a non-zero initial skip
     // offset is zero and limit is 1
     const initSkip = this.parameters.hasOwnProperty('skip') ? <number>this.parameters.skip : 0;
@@ -162,41 +183,34 @@ export class View {
       logger.fatal(`view.iterator:user defined offset ${initSkip} > data record ${this.length}`);
       throw new Error("iteratorQuick unable to start");
     }
-    
+    // Get see document to obtain 1st ranked key symbol
     let url = `${this.endPoint}${urlParameters(_startingParameters)}`;
     let data = await viewFetchUnwrap(url);
-    logger.debug(`Seed view document:${url} is ${inspect(data.rows[0])}`);
-    
+    logger.debug(`Seed view document:${url} is ${inspect(data.rows[0])}`);    
     logger.debug(`Start key is ${data.rows[0].key}`);
-    // We set buffer parameters in their intial state
+
+    // We set buffer parameters in its initial state
     // startKey is defined, limit is step value and skip is zero
     let _bufferParameters:{[k:string]: any } = { ... this.parameters };
     _bufferParameters.limit = this.parameters.hasOwnProperty('limit') ? this.parameters.limit : this.step;
     _bufferParameters.skip = 0;
-
     _bufferParameters.startkey = `"${data.rows[0].key}"`;
-
-    let currentStartPos = initSkip;
-    while( currentStartPos < (this.length as number) ) {
-      calls++;
-      
-      const url = `${this.endPoint}${urlParameters(_bufferParameters)}`;
-      //logger.info(`${calls} :: ${url}`);
-     
-      
-      let data = await viewFetchUnwrap(url);
-
-      //logger.info(`Packet(${data.rows.length}) First Item, Second Item, LastItem\n${inspect(data.rows[0])}\n${inspect(data.rows[1])}${inspect(data.rows[data.rows.length -1])}`);
-      //logger.debug(`iterator${inspect(data.rows)}:`);
+    // Get the first slice
+    url = `${this.endPoint}${urlParameters(_bufferParameters)}`;
+    data = await viewFetchUnwrap(url);
+    while(data.rows.length > 0) {
       for (let datum of data.rows)
         yield datum as viewDatum;
+
       // We set last key as first to fetch and ignore it w/ skip = 1
       const lastItem = data.rows[data.rows.length -1];
       _bufferParameters.startkey = `"${lastItem.key}"`;
       _bufferParameters.startkey_docid = `${lastItem.id}`;
       _bufferParameters.skip = 1;
-     
-      currentStartPos += _bufferParameters.limit
+      // Get next slice
+      url = `${this.endPoint}${urlParameters(_bufferParameters)}`;
+      data = await viewFetchUnwrap(url);
+      calls++;
     }
   }
   async mapQuick( fn:(d:viewDatum)=>any ): Promise<any[]> {
