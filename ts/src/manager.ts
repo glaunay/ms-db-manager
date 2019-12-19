@@ -81,14 +81,18 @@ export async function registerAllBatch(endPoints:string[], viewNS:string, design
     
     function goAsync(it:any[], i:number, total:number, n:number, results:any[], resolveAll:any, rejectAll:any) {
         let _volume = it[i];
-        _volume.buildIndex(viewNS, designObject).then((dbHand:{}) => {
+        _volume.buildIndex(viewNS, designObject)
+        .then((dbHand:{}) => {
             done++;
             results[i] = dbHand;
             logger.debug(`Done: ${done}/${total} [ i_index ${i} :: t_batch ${n}]`);
             if (i + n < total)
-                goAsync(it, i + n, total, n, results, resolveAll, rejectAll);
+                goAsync(it, i + n, total, n, results, resolveAll, rejectAll)
             if (done == total)
                 resolveAll(results);
+        }).catch((e:any)=>{        
+            logger.warn(typeof(e))         
+            rejectAll(e);        
         });
     };
   
@@ -196,7 +200,6 @@ export async function rank(ns:string):Promise<{[k:string]:number|string}[]> {
   
     let spKeyArray:t.View[] = await view(ns, `organisms`);
     let _:{[k:string]:number} = {};
-    logger.debug(`DDD${spKeyArray}`);
     for (const v of spKeyArray) {
         for await ( const vDatum of v.iteratorQuick() ) {
             if ( ! _.hasOwnProperty(vDatum.key) )
@@ -204,7 +207,6 @@ export async function rank(ns:string):Promise<{[k:string]:number|string}[]> {
             _[vDatum.key]++;
         }
     }
-    logger.info("####");
     return Object.keys(_).map((k:string) => { return { 'specie' : k, 'count' : _[k]}; })
         .sort((a,b)=>{ if (a.count < b.count) return -1;
                        if (a.count < b.count) return 1;

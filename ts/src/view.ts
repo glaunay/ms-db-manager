@@ -88,25 +88,33 @@ export async function getView(url:string, p?:viewParameters) {
   try {
     await v._init();
   } catch(e) {
-    if (isObject(e) && t.isCouchTimeOut(e))
-        throw (e);
+    throw (e);
   }
   return v;
 }
 
 async function viewFetchUnwrap(url:string) {
-    logger.debug(`View.iterator:[GET] ${url}`);
+    logger.debug(`viewFetchUnwrap:[GET] ${url}`);
     let res = await fetch(url, {
         method: 'GET'
     });
+    if (res.status == 404)
+        throw new t.httpError(res.statusText, url, res.status);
     let data = await res.json();
-    if(t.isCouchNotFound(data))
-        throw new Error(`view::${url} not found`);
+    logger.warn(`##${inspect(data)}`);
+    if(t.isCouchNotFound(data)) {
+        logger.warn('PING');
+        throw new t.oCouchNotFoundError(`view::${url} not found`, data, url);
+    }
     if (t.isCouchTimeOut(data))
-        throw(data);
+        throw new t.oCouchTimeOutError(`view::${url} not found`, data, url);
+    if (t.isCouchError(data))
+        throw new t.oCouchError(`view::${url} not found`, data, url);
+
     if (!t.isViewDocInterface(data))
         throw new Error(`Non valid view data ${inspect(data)}`);
 
+        logger.warn(`${url} OK`);
     return data;
 }
 
@@ -140,12 +148,12 @@ export class View {
     url += '?limit=0';
     try {
         const _ = await viewFetchUnwrap(url);
-        
+        this.length = _.total_rows;
     } catch (e) {
-        if (isObject(e) && t.isCouchTimeOut(e))
-            throw (e);
+        logger.warn('WW' + typeof(e) + 'w--');
+        throw (e);
     }
-    this.length = _.total_rows;
+    
   }
 
   async * iteratorSlow(): AsyncGenerator<any>{

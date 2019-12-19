@@ -7,6 +7,37 @@ import { isObject, isEmptyObject } from './utils';
 import { timeIt } from './utils';
 import {getView} from './view';
 
+
+/**
+ * Fetching a couchDB documen at provided url
+ * Checking for :
+ *  404 error
+ *  json keys '_rev' and '_id'
+ * 
+ * @param url The GET url
+ * @returns Promise<{[k:string]:string}> The couchDB document
+ */
+async function docFetchUnwrap(url:string, data?:any) {
+    const _p = data ? { 
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers:{ "Content-Type": "application/json" }
+    } : { method: 'GET' };
+
+    logger.debug(`docFetchUnwrap:[${inspect(_p)}] ${url}`);
+    const res = await fetch(url, _p);
+
+    if (res.status == 404)
+        throw new t.httpError(res.statusText, url, res.status);
+    const _data = await res.json();
+    if (!t.isDocument(data))
+        throw new t.oCouchErrorNotDocument(url, data);
+
+    return data;
+}
+
+
+
 /**
 * Object-oriented API for a single couchDB database
 * 
@@ -39,17 +70,10 @@ export class Volume {
      */
     async handshake() {
         try {
-            let url = this.endpoint;
-            logger.debug(`GET:${url}`);
-            let res = await fetch(url, {
-                method: 'GET'/*,
-            body: JSON.stringify(this.wrapBulk(packet)),
-            headers: { "Content-Type": "application/json" }
-            */
-            });
-            return res.json(); // Seems a Promise Object
+            const url = this.endpoint;
+            const res = await docFetchUnwrap(url);
         } catch (e) {
-            logger.error(`Can't handshake at ${this.endpoint} reason : ${e}`);
+            logger.error(`Can't handshake at ${this.endpoint} reason : ${inspect(e)}`);
             throw(e);
         }
     }
@@ -62,14 +86,17 @@ export class Volume {
      * @memberof Volume
      */
     async defaultViewKey(viewNS:string){
-        const url = this.endpoint + `/_design/${viewNS}`;      
-        let res =  await fetch(url, {
-            method: 'GET'
-        });
-        let _doc = await res.json();
-        if(!_doc.hasOwnProperty("views"))
-            throw new Error(`Irregular view design document at [${url}]\n${inspect(_doc)}`);
-        return Object.keys(_doc.views)[0];
+        const url = this.endpoint + `/_design/${viewNS}`;   
+        try {
+            const _doc = await docFetchUnwrap(url);   
+            if(!_doc.hasOwnProperty("views"))
+                throw new Error(`Irregular view design document at [${url}]\n${inspect(_doc)}`);
+
+            return Object.keys(_doc.views)[0];
+        } catch(e) {
+            throw (e);
+        }
+    
     }
    
     /**
@@ -117,12 +144,8 @@ export class Volume {
         //`/_design/${viewNS}`
         const url = this.endpoint + `/${docEndPoint}`;
         try {
-            logger.debug(`mergeAt [GET]${url}`);
-            let res = await fetch(url, {
-                method: 'GET'
-            });
-            const _ = await res.json();
-            data["_rev"] = _._rev;
+            const res = await docFetchUnwrap(url);
+            data["_rev"] = res._rev;
         } catch (e) {
             throw new Error(`mergeAt:Unable to fetch document ${url}`);
         }
@@ -202,7 +225,9 @@ export class Volume {
 
             return json;
         } catch (e) {
-            throw new Error("build Index failed");
+            logger.error(`${this.name} : Build index failed`);
+            logger.error(`${inspect(e)}`);
+            throw (e)
         }
     }
 
@@ -226,15 +251,13 @@ export class Volume {
             const viewObj:t.View = await getView(url, _vParam);
             return viewObj;
         } catch (e) {
-            if (isObject(e) && t.isCouchTimeOut(e)) {
+            if (e instanceof t.oCouchTimeOutError) {
                 logger.warn(`view needs indexation [${url}]`);
                 await this.waitForIndexation();
                 const viewObj:t.View = await getView(url, _vParam);
                 return viewObj;
-            } else {
-                logger.fatal(e);
-                throw(e);
             }
+            throw (e);
         }
     }
     /*
@@ -287,11 +310,7 @@ export class Volume {
                     };
         try {
             const url = `${this.endpoint}/_bulk_docs`;
-            const res = await fetch(url, {
-                method: 'POST',
-                body: JSON.stringify(body),
-                headers: { "Content-Type": "application/json" }
-            });
+            const res = await fetch(url, body);
             let resp = await res.text();
             resp = JSON.parse(`{ "bulkUpdate" : ${resp}}`);
             const errors = resp.bulkUpdate.filter((e:{})=>e.hasOwnProperty("error"));
@@ -359,6 +378,8 @@ export class Volume {
         } catch (e) {
             throw new Error(`${this.name} failed to get document at ${docID}`);
         }
+        if (t.isCouchNotFound(json)) 
+            throw(json);
         throw new Error (`Irregular document pulled ${inspect(json)}`);
     } 
     /**

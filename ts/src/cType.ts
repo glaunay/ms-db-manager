@@ -94,7 +94,9 @@ export function isCouchResponse(data:{}) : data is couchResponse {
 
 export interface couchError {
     error: string;
+    reason:string;
 }
+
 export function isCouchError(data:any): data is couchError{
     return data.hasOwnProperty("error");
 }
@@ -128,11 +130,56 @@ export function isCouchNotFound(data:couchError): data is couchNotFound {
     return false;
 }
 
+export class httpError extends Error{   
+    url:string
+    code:number
+
+    constructor(msg:string, url:string, code:number){
+        super(msg);
+        this.url     = url;
+        this.code    = code;
+    }
+}
+
+export class oCouchError extends Error implements couchError{
+    error:string
+    reason:string
+    url?:string
+    constructor(message:string, datum:couchError, url?:string) {
+        super(message);
+        this.error  = datum.error;
+        this.reason = datum.reason;
+        this.url    = url;
+    }
+  }
+
+export class oCouchNotFoundError extends oCouchError {
+    constructor(message:string, datum:couchError, url?:string) {
+        super(message, datum, url);
+    }
+}
+
+export class oCouchTimeOutError extends oCouchError {
+    constructor(message:string, datum:couchError, url?:string) {
+        super(message, datum, url);
+    }
+}
+
+export class oCouchErrorNotDocument extends Error {
+    url : string
+    doc : {[k:string]:string}
+    
+    constructor(url:string, datum:{[k:string]:string}) {
+        super("wrong document format");
+        this.url = url;
+        this.doc = datum;
+    }
+}
+
 export interface documentInterfaceCore {
     '_id' : string,
     '_rev' : string,
 }
-
 
 export interface documentInterface extends documentInterfaceCore {
     [key: string]: any 
