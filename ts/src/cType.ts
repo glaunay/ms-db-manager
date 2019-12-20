@@ -114,7 +114,7 @@ export function isCouchTimeOut(data:couchError): data is couchTimeOut {
 export interface couchUpdateConflict extends couchError{
     reason : "Document update conflict."
 }
-export function isCouchUpdateConflict(data:couchError): data is couchUpdateConflict {
+export function isCouchUpdateConflict(data:any): data is couchUpdateConflict {
     if(isCouchError(data)) 
         return data.error === "conflict"
     return false;
@@ -124,7 +124,7 @@ export interface couchNotFound extends couchError {
     reason : "missing"
 }
 
-export function isCouchNotFound(data:couchError): data is couchNotFound {
+export function isCouchNotFound(data:any): data is couchNotFound {
     if(isCouchError(data)) 
         return data.error === 'not_found'
     return false;
@@ -151,17 +151,23 @@ export class oCouchError extends Error implements couchError{
         this.reason = datum.reason;
         this.url    = url;
     }
-  }
+}
+
+export class oCouchUpdateConflictError extends oCouchError {
+    constructor(datum:couchError, url?:string) {
+        super("document update conflict", datum, url);
+    }
+}
 
 export class oCouchNotFoundError extends oCouchError {
-    constructor(message:string, datum:couchError, url?:string) {
-        super(message, datum, url);
+    constructor(datum:couchError, url?:string) {
+        super("document not found", datum, url);
     }
 }
 
 export class oCouchTimeOutError extends oCouchError {
-    constructor(message:string, datum:couchError, url?:string) {
-        super(message, datum, url);
+    constructor(datum:couchError, url?:string) {
+        super("time out request", datum, url);
     }
 }
 
@@ -169,10 +175,21 @@ export class oCouchErrorNotDocument extends Error {
     url : string
     doc : {[k:string]:string}
     
-    constructor(url:string, datum:{[k:string]:string}) {
+    constructor(datum:{[k:string]:string}, url:string) {
         super("wrong document format");
         this.url = url;
         this.doc = datum;
+    }
+}
+
+export class SetIndexError extends Error {
+    database:string
+    viewNS:string
+
+    constructor(message:string, database:string, ns:string) {
+        super(message);
+        this.database = database;
+        this.viewNS = ns;
     }
 }
 
@@ -184,13 +201,19 @@ export interface documentInterfaceCore {
 export interface documentInterface extends documentInterfaceCore {
     [key: string]: any 
 }
-
 export function isDocument(data:{}): data is documentInterfaceCore {
     return data.hasOwnProperty("_id") && data.hasOwnProperty("_rev");
 }
 
 export function isEmptyDocument(data:{}): Boolean {
     return data.hasOwnProperty("_id") && data.hasOwnProperty("_rev") && Object.keys(data).length == 2;
+}
+
+export interface documentViewInterface extends documentInterfaceCore{
+    views : { [k:string]:any }
+}
+export function isDocumentView(data:{}): data is documentViewInterface {
+    return isDocument(data) && data.hasOwnProperty("views");
 }
 
 export interface nodePredicateFnType { 

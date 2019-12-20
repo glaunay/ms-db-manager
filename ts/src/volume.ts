@@ -17,7 +17,7 @@ import {getView} from './view';
  * @param url The GET url
  * @returns Promise<{[k:string]:string}> The couchDB document
  */
-async function docFetchUnwrap(url:string, data?:any) {
+async function docFetchUnwrap(url:string, data?:any):Promise<t.documentInterfaceCore> {
     const _p = data ? { 
         method: 'POST',
         body: JSON.stringify(data),
@@ -26,14 +26,21 @@ async function docFetchUnwrap(url:string, data?:any) {
 
     logger.debug(`docFetchUnwrap:[${inspect(_p)}] ${url}`);
     const res = await fetch(url, _p);
-
-    if (res.status == 404)
+    logger.debug(`docFetchUnwrap:HTTPresp ${inspect(res)}`);
+    
+    let resData;
+    try {
+        resData = await res.json();
+    } catch (e) {
         throw new t.httpError(res.statusText, url, res.status);
-    const _data = await res.json();
-    if (!t.isDocument(data))
-        throw new t.oCouchErrorNotDocument(url, data);
-
-    return data;
+    }
+    if (t.isCouchNotFound(resData))
+        throw new t.oCouchNotFoundError(resData, url);
+    if (!t.isDocument(resData))
+        throw new t.oCouchErrorNotDocument(resData, url);    
+    if (t.isCouchUpdateConflict(resData)) 
+        throw new t.oCouchUpdateConflictError(resData, url);  
+    return resData;  
 }
 
 
@@ -89,10 +96,10 @@ export class Volume {
         const url = this.endpoint + `/_design/${viewNS}`;   
         try {
             const _doc = await docFetchUnwrap(url);   
-            if(!_doc.hasOwnProperty("views"))
+            if(! t.isDocumentView(_doc))
                 throw new Error(`Irregular view design document at [${url}]\n${inspect(_doc)}`);
 
-            return Object.keys(_doc.views)[0];
+            return Object.keys(<t.documentViewInterface>_doc.views)[0];
         } catch(e) {
             throw (e);
         }
@@ -111,13 +118,7 @@ export class Volume {
         logger.debug(`[${this.endpoint}] Setting index`);
         try {
             let url = this.endpoint + `/_design/${viewNS}`;
-            logger.debug(`PUT:${url}`);
-            let res = await fetch(url, {
-                method: 'PUT',
-            body: JSON.stringify(designObject),
-            headers: { "Content-Type": "application/json" }
-            });
-            let _ = await res.json();
+            const resp = docFetchUnwrap(url, designObject)
             if (t.isCouchUpdateConflict(_)) {
                 logger.warn(`setIndex: A previous instance of ${viewNS} is found and you provided a design Object`)
                 logger.warn(`setIndex: Overwriting content at [${url}]`)
@@ -214,20 +215,24 @@ export class Volume {
         const time = process.hrtime();
         
         logger.debug(`vNS is ${viewNS} and designObject is ${inspect(designObject)}`);
+
         try {
             if (designObject)
                 await this.setIndex(designObject, viewNS);
+        } catch(e) {
+            throw new t.SetIndexError('volume.setIndex Error', this.name, viewNS);
+        }
+
+        try {
             const triggerKey = await this.defaultViewKey(viewNS);
             logger.debug(`Following key will be used to trigger index building "${triggerKey}"`);
-            let json = await this.view(viewNS, triggerKey);
+            let oView:t.View = await this.view(viewNS, triggerKey);
             const _time = timeIt(time);
             logger.success(`${this.name} buildIndex in ${_time[0]}H:${_time[1]}M:${_time[0]}S`);
 
-            return json;
+            return oView;
         } catch (e) {
-            logger.error(`${this.name} : Build index failed`);
-            logger.error(`${inspect(e)}`);
-            throw (e)
+           throw(e);
         }
     }
 
@@ -256,46 +261,11 @@ export class Volume {
                 await this.waitForIndexation();
                 const viewObj:t.View = await getView(url, _vParam);
                 return viewObj;
-            }
+            }          
             throw (e);
         }
     }
-    /*
-    async _view (ns:string, cmd:string, limit?:number):Promise<t.viewInterface> { 
-        let url = this.endpoint + `/_design/${ns}/_view/${cmd}`;      
-        if(limit)
-            if(cmd.indexOf('?') >= 0)
-                url += `&limit=${limit}`
-            else
-                url += `?limit=${limit}`
-        
-    
-        logger.debug(`[view]GET:${url}`);
-        try {
-            let res = await fetch(url, {
-                method: 'GET'
-            });
-            let json = await res.json();
-            logger.debug(`${inspect(json)}`)
-            if (t.isCouchTimeOut(json)) {
-                logger.warn(`view needs indexation [${url}]`);
-                await this.waitForIndexation();
-                logger.debug(`Pulling index ${this.name}`);
-                let resBack = await fetch(url, {
-                    method: 'GET'
-                });
-                json = await resBack.json();
-            }
-            if(t.isCouchNotFound(json))
-                throw new Error(`view::${url} not found`);
-            logger.debug(`view[${this.name}@${url}] response:${inspect(json)}`);
-            return json;
-        } catch (e) {
-            logger.error(`Can't get view [${url}]\nfrom ${this.endpoint} reason : ${e}`);
-            throw(e);
-        }
-    }
-    */
+
     /**
      * Insert a collection of documents in the database
      *
@@ -310,7 +280,10 @@ export class Volume {
                     };
         try {
             const url = `${this.endpoint}/_bulk_docs`;
-            const res = await fetch(url, body);
+            const res = await fetch(url, { 
+                method: 'POST',
+                body: JSON.stringify(body),
+                headers:{ "Content-Type": "application/json" });
             let resp = await res.text();
             resp = JSON.parse(`{ "bulkUpdate" : ${resp}}`);
             const errors = resp.bulkUpdate.filter((e:{})=>e.hasOwnProperty("error"));
@@ -339,12 +312,12 @@ export class Volume {
             i++;
             let reqBody:t.couchBulkQuery = { "docs" : docIDs.splice(0, slice).map((key:string)=> { return { "id" : key };}) };
             try {
-                let url = this.endpoint + '/_bulk_get';
+                const url = this.endpoint + '/_bulk_get';
                 logger.debug(`GET:${url}`);
                 let res = await fetch(url, {
                     method: 'POST',
-                body: JSON.stringify(reqBody),
-                headers: { "Content-Type": "application/json" }            
+                    body: JSON.stringify(reqBody),
+                    headers: { "Content-Type": "application/json" }            
                 });
                 let data = await res.json(); // Seems a Promise Object
                 logger.debug(`getBulkDoc:${inspect(reqBody)}\n${inspect(data)}`);

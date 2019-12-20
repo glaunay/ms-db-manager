@@ -90,8 +90,7 @@ export async function registerAllBatch(endPoints:string[], viewNS:string, design
                 goAsync(it, i + n, total, n, results, resolveAll, rejectAll)
             if (done == total)
                 resolveAll(results);
-        }).catch((e:any)=>{        
-            logger.warn(typeof(e))         
+        }).catch((e:any)=>{               
             rejectAll(e);        
         });
     };

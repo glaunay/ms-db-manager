@@ -81,8 +81,7 @@ logger.info("\t\t***** Starting CRISPR databases manager MicroService *****\n");
     const t2 = timeIt(t1);
     logger.success(`Total buildIndex done in ${t2[0]}H:${t2[1]}M:${t2[2]}S`);
   } catch(e) {
-    logger.fatal(`Manager was unable to set the view` );
-    logger.fatal(typeof (e));
+    logger.fatal(`Manager was unable to get or set the view.\n=> ${e.message} at ${e.url}` );
     if(e instanceof t.oCouchNotFoundError)
           logger.fatal(`Did you provide a design document (--design)?`);
     process.exit(1);
