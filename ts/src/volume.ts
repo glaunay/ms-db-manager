@@ -283,7 +283,8 @@ export class Volume {
             const res = await fetch(url, { 
                 method: 'POST',
                 body: JSON.stringify(body),
-                headers:{ "Content-Type": "application/json" });
+                headers:{ "Content-Type": "application/json"}
+            });
             let resp = await res.text();
             resp = JSON.parse(`{ "bulkUpdate" : ${resp}}`);
             const errors = resp.bulkUpdate.filter((e:{})=>e.hasOwnProperty("error"));
