@@ -98,22 +98,27 @@ async function viewFetchUnwrap(url:string) {
     let res = await fetch(url, {
         method: 'GET'
     });
-    if (res.status == 500)
+    
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      logger.warn("Barthez");
         throw new t.httpError(res.statusText, url, res.status);
-    let data = await res.json();
-   
-    if(t.isCouchNotFound(data)) {
-        throw new t.oCouchNotFoundError(data, url);
     }
+    logger.debug(`viewFetchUnwrap data ${inspect(data)}`);
     if (t.isCouchTimeOut(data))
         throw new t.oCouchTimeOutError(data, url);
-    if (t.isCouchError(data))
+    
+    if(t.isCouchNotFound(data))
+      throw new t.oCouchNotFoundError(data, url);
+    if (t.isCouchError(data)) 
         throw new t.oCouchError(`view::${url} not found`, data, url);
-
     if (!t.isViewDocInterface(data))
-        throw new Error(`Non valid view data ${inspect(data)}`);
+      throw new Error(`Non valid view data ${inspect(data)}`);
 
     return data;
+  
 }
 
 export class View {
