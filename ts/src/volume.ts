@@ -17,9 +17,58 @@ import {getView} from './view';
  * @param url The GET url
  * @returns Promise<{[k:string]:string}> The couchDB document
  */
-async function docFetchUnwrap(url:string, data?:any):Promise<t.documentInterfaceCore> {
+
+async function getUnwrap(url:string):Promise<t.documentInterfaceCore>{
+    const res = await fetch(url, { method: 'GET' });
+    let resData;
+    try {
+        resData = await res.json();
+    } catch (e) {
+        throw new t.httpError(res.statusText, url, res.status);
+    }
+    if (t.isCouchNotFound(resData))
+        throw new t.oCouchNotFoundError(resData, url);
+    if (!t.isDocument(resData))
+        throw new t.oCouchErrorNotDocument(resData, url); 
+    return resData;
+}
+
+async function postPutUnwrap(url:string, data:any, method:string='POST'):Promise<t.couchResponse> {
+    const _p = { 
+        method: method,
+        body: JSON.stringify(data),
+        headers:{ "Content-Type": "application/json" }
+    };
+
+    logger.debug(`postPutUnwrap:[${inspect(_p)}] ${url}`);
+    const res = await fetch(url, _p);
+    logger.debug(`postPutUnwrap:HTTPresp ${inspect(res)}`);
+    
+    let resData;
+    try {
+        resData = await res.json();
+    } catch (e) {
+        throw new t.httpError(res.statusText, url, res.status);
+    }
+    logger.debug(`postPutUnwrap:data ${inspect(resData)}`);
+    if (t.isCouchNotFound(resData))
+        throw new t.oCouchNotFoundError(resData, url);
+    if (t.isCouchUpdateConflict(resData)) 
+        throw new t.oCouchUpdateConflictError(resData, url);  
+    if (t.isCouchError(resData))
+        throw new t.oCouchError("unexpected Error", resData, url);    
+
+    if (!t.isCouchResponse(resData))
+        throw new t.oCouchError("Not a valid response", resData, url);
+    
+    return resData as t.couchResponse;  
+}
+
+
+
+async function docFetchUnwrap(url:string, data?:any, method:string='POST'):Promise<t.documentInterfaceCore> {
     const _p = data ? { 
-        method: 'POST',
+        method: method,
         body: JSON.stringify(data),
         headers:{ "Content-Type": "application/json" }
     } : { method: 'GET' };
@@ -34,12 +83,14 @@ async function docFetchUnwrap(url:string, data?:any):Promise<t.documentInterface
     } catch (e) {
         throw new t.httpError(res.statusText, url, res.status);
     }
+
     if (t.isCouchNotFound(resData))
         throw new t.oCouchNotFoundError(resData, url);
-    if (!t.isDocument(resData))
-        throw new t.oCouchErrorNotDocument(resData, url);    
     if (t.isCouchUpdateConflict(resData)) 
         throw new t.oCouchUpdateConflictError(resData, url);  
+    if (!t.isDocument(resData))
+        throw new t.oCouchErrorNotDocument(resData, url);    
+
     return resData;  
 }
 
@@ -78,7 +129,7 @@ export class Volume {
     async handshake() {
         try {
             const url = this.endpoint;
-            const res = await docFetchUnwrap(url);
+            const res = await getUnwrap(url);
         } catch (e) {
             logger.error(`Can't handshake at ${this.endpoint} reason : ${inspect(e)}`);
             throw(e);
@@ -95,7 +146,7 @@ export class Volume {
     async defaultViewKey(viewNS:string){
         const url = this.endpoint + `/_design/${viewNS}`;   
         try {
-            const _doc = await docFetchUnwrap(url);   
+            const _doc = await getUnwrap(url);   
             if(! t.isDocumentView(_doc))
                 throw new Error(`Irregular view design document at [${url}]\n${inspect(_doc)}`);
 
@@ -114,21 +165,30 @@ export class Volume {
      * @memberof Volume
      * @returns {Object} A couchDB response document
      */
-    async setIndex(designObject:{}, viewNS:string, recordLimit=5) {
+    async setIndex(designObject:{}, viewNS:string, recordLimit=5):Promise<any> {
         logger.debug(`[${this.endpoint}] Setting index`);
-        try {
-            let url = this.endpoint + `/_design/${viewNS}`;
-            let resp = await docFetchUnwrap(url, designObject)
-            if (t.isCouchUpdateConflict(resp)) {
-                logger.warn(`setIndex: A previous instance of ${viewNS} is found and you provided a design Object`)
-                logger.warn(`setIndex: Overwriting content at [${url}]`)
-                let _ = await this.mergeAt(`/_design/${viewNS}`, designObject);
-                resp = await this.setIndex(_, viewNS);
-            }   
+        const url = this.endpoint + `/_design/${viewNS}`;
+        try { 
+            let resp = await postPutUnwrap(url, designObject, 'PUT'); 
             return resp;
         } catch (e) {
-            logger.error(`Can't set view from ${this.endpoint} reason : ${e}`);
-            throw(e);
+            if (e instanceof t.oCouchUpdateConflictError) {
+                logger.warn(`setIndex: A previous instance of ${viewNS} is found and you provided a design Object`)
+                logger.warn(`setIndex: Overwriting content at [${url}]`)
+                const _ = await this.mergeAt(`/_design/${viewNS}`, designObject);
+                let resp;
+                try {
+                    resp = await this.setIndex(_, viewNS);
+                    return resp;
+                } catch(e2){
+                    logger.error(`Failed to resubmit view from ${this.endpoint} reason : ${e2}`);
+                    throw(e);
+                }
+
+            } else {
+                logger.error(`Can't set view from ${this.endpoint} reason : ${e}`);
+                throw(e);
+            }
         }
     }
     /**
@@ -145,7 +205,7 @@ export class Volume {
         //`/_design/${viewNS}`
         const url = this.endpoint + `/${docEndPoint}`;
         try {
-            const res = await docFetchUnwrap(url);
+            const res = await getUnwrap(url);
             data["_rev"] = res._rev;
         } catch (e) {
             throw new Error(`mergeAt:Unable to fetch document ${url}`);
