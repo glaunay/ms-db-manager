@@ -148,7 +148,7 @@ export class View {
         const _ = await viewFetchUnwrap(url);
         this.length = _.total_rows;
     } catch (e) {
-        logger.warn('WW' + typeof(e) + 'w--');
+        logger.warn(`Error of viewFetchUnwrap:${inspect(e)}`);
         throw (e);
     }
     
