@@ -118,14 +118,14 @@ export class Volume {
         logger.debug(`[${this.endpoint}] Setting index`);
         try {
             let url = this.endpoint + `/_design/${viewNS}`;
-            const resp = docFetchUnwrap(url, designObject)
-            if (t.isCouchUpdateConflict(_)) {
+            let resp = await docFetchUnwrap(url, designObject)
+            if (t.isCouchUpdateConflict(resp)) {
                 logger.warn(`setIndex: A previous instance of ${viewNS} is found and you provided a design Object`)
                 logger.warn(`setIndex: Overwriting content at [${url}]`)
                 let _ = await this.mergeAt(`/_design/${viewNS}`, designObject);
-                res = await this.setIndex(_, viewNS);
+                resp = await this.setIndex(_, viewNS);
             }   
-            return _;
+            return resp;
         } catch (e) {
             logger.error(`Can't set view from ${this.endpoint} reason : ${e}`);
             throw(e);

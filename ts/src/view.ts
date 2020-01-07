@@ -103,10 +103,10 @@ async function viewFetchUnwrap(url:string) {
     let data = await res.json();
    
     if(t.isCouchNotFound(data)) {
-        throw new t.oCouchNotFoundError(`view::${url} not found`, data, url);
+        throw new t.oCouchNotFoundError(data, url);
     }
     if (t.isCouchTimeOut(data))
-        throw new t.oCouchTimeOutError(`view::${url} not found`, data, url);
+        throw new t.oCouchTimeOutError(data, url);
     if (t.isCouchError(data))
         throw new t.oCouchError(`view::${url} not found`, data, url);
 
