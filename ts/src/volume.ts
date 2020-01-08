@@ -220,7 +220,9 @@ export class Volume {
      */
     async waitForIndexation(){
         logger.debug(`${this.name} starts waiting for indexation`);
-
+        let bar:any|undefined = undefined;
+        //const bar = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
+        //bar.start(100, 0);
         return new Promise ((resolve, reject) => {
             let asyncIntervals:Boolean[] = [];
             const runAsyncInterval = async (cb:()=>Promise<any>, interval:number, intervalIndex:number) => {

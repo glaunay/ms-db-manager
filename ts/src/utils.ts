@@ -13,6 +13,11 @@ export function timeIt(time:[number, number]):[number, number, number, number] {
     return [ h, min, diff[0], diff[1] ];
 }
 
+export function unixTimeStamp():number {
+    const h:unknown = new Date();
+    return  Math.floor(<number>h / 1000);
+}
+
 export function isObject(n:any):Boolean {
     return typeof n === 'object' && n !== null
 }

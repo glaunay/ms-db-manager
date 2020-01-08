@@ -5,6 +5,8 @@ export  {View, viewParameters} from "./view";
 import  {View} from "./view";
 
 //export type View = View;
+
+
 export interface couchBulkQueryItem {
    id   : string,
    rev ?: string,
@@ -40,16 +42,36 @@ export interface updateBulkReport {
     deleted : any[] //https://docs.couchdb.org/en/stable/api/database/bulk-api.html#updating-documents-in-bulk
 }
 
+
+export interface viewItem {
+    id  : string,
+    key : string,
+    value : number|string
+}
+
+export function isViewItem(d:any): d is viewItem {
+    if ( !(d.hasOwnProperty('id') && d.hasOwnProperty('key') && d.hasOwnProperty('value'))  )
+        return false;
+    return (    typeof(d.is) == 'string' && typeof(d.key)   == 'string' && 
+            (typeof(d.value) == 'string' || typeof(d.value) == 'number') );
+}
+
 export interface viewDocInterface {
     total_rows : number,
-    offset : number,
-    rows : {[k:string]:any}[]
+    offset     : number,
+    //rows       : {[k:string]:any}[]
+    rows : viewItem[]
 }
-export function isViewDocInterface(v:any) {
-    for ( let k in v ) {
+
+export function isViewDocInterface(v:any): v is viewDocInterface {
+    for (let k in v)
         if (k != 'total_rows' && k != 'offset' && k != 'rows')
             return false; 
-    }
+    // overkill
+    for (let d of v.rows)
+        if ( !isViewItem(d) )
+            return false;
+
     return true;
 }
 /*
@@ -66,7 +88,17 @@ export interface boundViewInterface {
     view : View
 }
 
-export function isEmptyBoundViewInterface(v:boundViewInterface) {
+export function isBoundViewInterface(d:any): d is viewItem {
+    if ( !(d.hasOwnProperty('_')    && d.hasOwnProperty('vNS')    &&
+           d.hasOwnProperty('vID')  && d.hasOwnProperty('source') &&
+           d.hasOwnProperty('view')) )
+        return false;
+    return ( typeof(d._)   == 'number' && typeof(d.vNS)    == 'string' && 
+             typeof(d.vID) == 'string' && typeof(d.source) == 'string' &&
+             d.view instanceof View );
+}
+
+export function isEmptyBoundViewInterface(v:boundViewInterface) : boolean {
     return v.view.length == 0;
 }
 

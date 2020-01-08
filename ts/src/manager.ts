@@ -4,6 +4,8 @@ import * as t from "./cType";
 import { logger } from "./logger";
 import { inspect } from "util";
 import { timeIt, isEmptyObject } from './utils';
+import cliProgress from 'cli-progress';
+
 
 const fetch = require('node-fetch');
 const readline = require('readline');

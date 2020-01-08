@@ -19,6 +19,7 @@
   "homepage": "https://github.com/glaunay/ms-db-manager#readme",
   "dependencies": {
     "@types/node": "^12.12.14",
+    "cli-progress": "^3.5.0",
     "commander": "^4.0.1",
     "express": "^4.17.1",
     "moment": "^2.24.0",

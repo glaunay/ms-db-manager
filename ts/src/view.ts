@@ -83,7 +83,7 @@ function urlParameters(data:viewParameters|undefined):string {
 }
 
 // Sufficeint to trigger indexing ?
-export async function getView(url:string, p?:viewParameters) {
+export async function getView(url:string, p?:viewParameters):Promise<View> {
   const v = new View(url, p);
   try {
     await v._init();
@@ -93,7 +93,7 @@ export async function getView(url:string, p?:viewParameters) {
   return v;
 }
 
-async function viewFetchUnwrap(url:string) {
+async function viewFetchUnwrap(url:string):Promise<t.viewDocInterface> {
     logger.debug(`viewFetchUnwrap:[GET] ${url}`);
     let res = await fetch(url, {
         method: 'GET'
@@ -103,7 +103,6 @@ async function viewFetchUnwrap(url:string) {
     try {
       data = await res.json();
     } catch (e) {
-      logger.warn("Barthez");
         throw new t.httpError(res.statusText, url, res.status);
     }
     logger.debug(`viewFetchUnwrap data ${inspect(data)}`);
@@ -117,7 +116,7 @@ async function viewFetchUnwrap(url:string) {
     if (!t.isViewDocInterface(data))
       throw new Error(`Non valid view data ${inspect(data)}`);
 
-    return data;
+    return data as t.viewDocInterface;
   
 }
 
