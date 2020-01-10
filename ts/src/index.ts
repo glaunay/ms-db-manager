@@ -38,7 +38,6 @@ if (program.output) {
 
 logger.info("\t\t***** Starting CRISPR databases manager MicroService *****\n");
 
-
 (async () => {
   try {
 

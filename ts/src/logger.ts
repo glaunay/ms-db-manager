@@ -43,7 +43,7 @@ const consoleT = new ws.transports.Console({
   format : ws.format.combine( ws.format.colorize({ all:true }) )
   })
 // See winston format API at https://github.com/winstonjs/logform
-const cLogger = ws.createLogger({ /* Format options common to all transports */
+const baseLogger = ws.createLogger({ /* Format options common to all transports */
   format: ws.format.combine(
     ws.format.timestamp({
       format: () => {
@@ -54,6 +54,20 @@ const cLogger = ws.createLogger({ /* Format options common to all transports */
   ),
   levels: myCustomLevels.levels,
   transports: [consoleT]
+});
+
+// Same parameter logger w/out default console transport
+const mutedLogger = ws.createLogger({ /* Format options common to all transports */
+  format: ws.format.combine(
+    ws.format.timestamp({
+      format: () => {
+        return moment().format('YYYY-MM-DD hh:mm:ss')
+      }
+    }),
+    ws.format.printf((info:any) => `[${info.timestamp}] ${info.level}: ${info.message}`)
+  ),
+  levels: myCustomLevels.levels,
+  transports: []
 });
 
 //cLogger.colorize = process.stdout.isTTY;
@@ -87,5 +101,9 @@ export function setFile(options:fileTransportOptions) {
   options.colorize = false;
   cLogger.add( new ws.transports.File(options) );
 }
-
-export {cLogger as logger};
+// 
+let cLogger = baseLogger;
+function muteLogger() {
+  cLogger = mutedLogger;
+}
+export {cLogger as logger, muteLogger};

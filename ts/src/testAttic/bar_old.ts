@@ -28,19 +28,14 @@ function generateIndexer(name:string, msc:number=1000) {
     let doc = JSON.parse(JSON.stringify(template));
     doc.database = name;
     doc.started_on = unixTimeStamp();
-    const offset = 5000;
+    const offset = 50000;
    
     const label = setInterval ( function(){
         doc.changes_done = doc.changes_done + offset < doc.total_changes ? doc.changes_done + offset : doc.total_changes;
         doc.progress = Math.round( (doc.changes_done / doc.total_changes) * 100 );
         emiter.emit("update");
-        //console.log(doc.changes_done, doc.total_changes);
-       // dStream.write(`-->${name} ${doc.changes_done}/${doc.total_changes}\n`);
         if (doc.changes_done === doc.total_changes)
-           //process.exit();
-            emiter.emit("completed");
-          //  console.log("----->BIP");
-            
+            emiter.emit("completed");      
     }, msc);
     emiter.on("completed", function(){
         dStream.write("####################\n");
@@ -55,7 +50,6 @@ function generateIndexer(name:string, msc:number=1000) {
         e : emiter
     }
 }
-
 
 
 function formatter (options:any, params:any, payload:any) {
@@ -92,33 +86,45 @@ function stringifyTime(time:number) {
     return `${h}${m}${s}`;
 }
 
-const mBar = new cliProgress.MultiBar({
-    clearOnComplete: true,
-    hideCursor: true,
-    format: formatter
- 
-}, cliProgress.Presets.shades_grey);
+function baseTest(){
+    const mBar = new cliProgress.MultiBar({
+        clearOnComplete: false,
+        hideCursor: true, //forceRedraw
+        format: formatter
+    }, cliProgress.Presets.shades_grey);
 
-setTimeout(()=> {
-    const indexer1 = generateIndexer("shards/80000000-ffffffff/crispr_rc01_v36.1575985817");
-    const indexer2 = generateIndexer("shards/80000000-ffffffff/crispr_rc01_v36.988888888", 500);
-    const mb1 = mBar.create(indexer1.doc.total_changes, 0, indexer1.doc);
-    const mb2 = mBar.create(indexer2.doc.total_changes, 0, indexer2.doc);
-    if(mb1) {
-        indexer1.e.on("update", ()=> {
-            mb1.update(indexer1.doc.changes_done, indexer1.doc);
-        })
-        indexer1.e.on("completed", ()=> {   
-            mb1.stop();
-        })
-    }
-    if(mb2) {
-        indexer2.e.on("update", ()=> {       
-            mb2.update(indexer2.doc.changes_done, indexer2.doc);
-        })
-       indexer2.e.on("completed", ()=> {
-            mb2.stop();
-        })
-    }
-    
-}, 2000 );
+    setTimeout(()=> {
+        let nBars = 2;
+        const indexer1 = generateIndexer("shards/80000000-ffffffff/crispr_rc01_v36.1575985817");
+        const indexer2 = generateIndexer("shards/80000000-ffffffff/crispr_rc01_v36.988888888", 500);
+        const mb1 = mBar.create(indexer1.doc.total_changes, 0, indexer1.doc);
+        const mb2 = mBar.create(indexer2.doc.total_changes, 0, indexer2.doc);
+        if(mb1) {
+            indexer1.e.on("update", ()=> {
+                mb1.update(indexer1.doc.changes_done, indexer1.doc);
+            })
+            indexer1.e.on("completed", ()=> {   
+                mb1.stop();
+                nBars--;
+                if (nBars == 0) {
+                    mBar.stop();
+                    console.log("OOH1");
+                }
+            })
+        }
+        if(mb2) {
+            indexer2.e.on("update", ()=> {       
+                mb2.update(indexer2.doc.changes_done, indexer2.doc);
+            })
+        indexer2.e.on("completed", ()=> {
+                mb2.stop();
+                nBars--;
+                if (nBars == 0) {
+                    mBar.stop();
+                    console.log("OOH2");                
+                }
+            })
+        }
+        
+    }, 2000 );
+}

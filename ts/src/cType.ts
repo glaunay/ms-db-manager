@@ -1,7 +1,7 @@
 import { logger } from "./logger";
-import {inspect} from "util";
-export  {View, viewParameters} from "./view";
-
+import { inspect } from "util";
+export { View, viewParameters} from "./view";
+export { CompactionTask, IndexerTask, taskObjs as taskTypes, activeTaskCompaction as activeTaskDatabase } from "./activeTask";
 import  {View} from "./view";
 
 //export type View = View;

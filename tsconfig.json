@@ -11,7 +11,7 @@
     "allowJs": true,                       /* Allow javascript files to be compiled. */
     // "checkJs": true,                       /* Report errors in .js files. */
     // "jsx": "preserve",                     /* Specify JSX code generation: 'preserve', 'react-native', or 'react'. */
-    // "declaration": true,                   /* Generates corresponding '.d.ts' file. */
+    "declaration": false,                   /* Generates corresponding '.d.ts' file. */
     // "sourceMap": true,                     /* Generates corresponding '.map' file. */
     // "outFile": "./",                       /* Concatenate and emit output to single file. */
     "outDir": "./build/",                        /* Redirect output structure to the directory. */
@@ -59,10 +59,15 @@
     // "emitDecoratorMetadata": true,         /* Enables experimental support for emitting type metadata for decorators. */
   },
   "files": [
-    "./ts/src/index.ts",
-    "./ts/src/volume.ts",
-    "./ts/src/manager.ts",
-    "./ts/src/view.ts",
-    "./ts/src/bar.ts"
-  ]
+    "ts/src/index.ts",
+    "ts/src/watcher.ts",
+    "ts/src/cType.ts",
+    "ts/src/logger.ts",
+    "ts/src/manager.ts",
+    "ts/src/volume.ts",
+    "ts/src/view.ts",
+    "ts/src/activeTask.ts", 
+    "ts/src/taskBars.ts",
+    "ts/src/utils.ts",
+   ]
 }
