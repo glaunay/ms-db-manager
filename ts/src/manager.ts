@@ -4,6 +4,8 @@ import * as t from "./cType";
 import { logger } from "./logger";
 import { inspect } from "util";
 import { timeIt, isEmptyObject } from './utils';
+import { join } from "path";
+import { SSL_OP_EPHEMERAL_RSA } from "constants";
 
 const fetch = require('node-fetch');
 const readline = require('readline');
@@ -69,7 +71,7 @@ async function parseMsg(couchMsg:Promise<t.couchResponse>):Promise<t.couchRespon
  * @returns {Object} Raw results of the queried views
  * @memberof DBmanager
  */
-export async function registerAllBatch(endPoints:string[], viewNS:string, designObject?:{}, n:number = 2):Promise<any> {
+export async function _registerAllBatch(endPoints:string[], viewNS:string, designObject?:{}, n:number = 2):Promise<any> {
     endPointsRegistry = endPoints.map( (endPoint) => new vLib.Volume(`${PREFIX}/${endPoint}`, endPoint, CREDS) );
     oEndPointsRegistry = {};
     endPointsRegistry.forEach((v:vLib.Volume) => { oEndPointsRegistry[v.name] = v; });
@@ -101,6 +103,46 @@ export async function registerAllBatch(endPoints:string[], viewNS:string, design
         work.push(goAsync(endPointsRegistry, currIndex, total, n, results, resolveAll, rejectAll));
     });
   }
+
+  function indexBatchFnDecorator(volumes:vLib.Volume[], viewNS:string,  designObject?:{}){
+      const fn = async function(){
+        let promises = volumes.map((v) => v.buildIndex(viewNS, designObject))
+        //await sleep(5000)
+        return Promise.all(promises)
+      }
+      return fn
+      
+  }
+
+  function sleep(ms:number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+ export async function registerAllBatch(endPoints: string[], viewNS:string, designObject?:{},slice_size:number = 2):Promise<any>{
+
+    function slice_endpoints(endPointsRegistry:vLib.Volume[], size:number){
+        logger.debug("slice_endpoints")
+        var slicedEndPointsRegistry:vLib.Volume[][]=[]
+        for (var i=0, j=endPointsRegistry.length; i<j; i+= size){
+            slicedEndPointsRegistry.push(endPointsRegistry.slice(i, i+size))
+        }
+        return slicedEndPointsRegistry
+    }
+
+    logger.debug("registerAllBatch")
+    endPointsRegistry = endPoints.map( (endPoint) => new vLib.Volume(`${PREFIX}/${endPoint}`, endPoint, CREDS) );
+    let slicedEndPointsRegistry = slice_endpoints(endPointsRegistry, slice_size)
+
+    let indexBatchArray = slicedEndPointsRegistry.map((slice) => indexBatchFnDecorator(slice, viewNS, designObject))
+
+    let all_promises = []
+    for (let f of indexBatchArray){
+        all_promises.push(await f())
+    }
+
+    return Promise.all(all_promises)
+    //return indexBatchArray[0]()
+ }
 
 /**
  * Init connection to a couchDB daemon
