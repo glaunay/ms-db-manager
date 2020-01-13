@@ -17,8 +17,7 @@ interface tParameters {
 program
   .option("-c, --config <path>", "Load config file")
   .option("-v, --verbosity <logLevel>", "Set log level (debug, info, success, warning, error, critical)")
-  .option("-w, --watch", "Run couchDB task watcher")
-  .option("-t --target <targetsOpt>", "Target databases specified as comma-separated list or regexp", parseEndpoints)
+ .option("-t --target <targetsOpt>", "Target databases specified as comma-separated list or regexp", parseEndpoints)
   .option("-d, --design <pathToFile>", "Design Document containing views definitions")
   .option("-o, --output <logFile>", "fpath to the log file")
   .option("-n, --namespace <ViewNameSpace>", "Name of the database the set or read view definitions", "vNS")
@@ -56,17 +55,10 @@ logger.info("\t\t***** Starting CRISPR databases manager MicroService *****\n");
       logger.fatal(e);
     }
 
-  if (program.watch) {
-      DBmanager._watch();
-      return;
-  }
-
   if(! program.target) {
     logger.info("No Target databases specified, exiting");
     process.exit(0);
   }
-
-
   
   const _doc = program.design ? await parseDesign(program.design) : undefined;
   const dbTarget = program.target

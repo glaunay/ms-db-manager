@@ -180,7 +180,7 @@ export async function activeTasks() {
  * on all registered databases
  * 
  * @param {string} ns The namespace of the view
- * @param {string} specie The namespace of the specie 
+ * @param {string} specie The name of the specie 
  * @returns {Promise<t.boundViewInterface[]>} List of resulting views, each wrapped with the database and view names
  * @memberof DBmanager
  */
@@ -281,63 +281,4 @@ export async function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateF
 export function view(ns:string, cmd:string, p?:t.viewParameters):Promise<t.View[]> {
     let views:Promise<t.View>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd, p));
     return Promise.all(views);
-}
-
-/**
- * Display the monitoring of the active tasks of the couchDB process
- * 
- */
-export async function watch() {
-    logger.info("Watching Tasks")
-    let n = 0;
-    setInterval(()=>{
-      let msg = `A${n}\nB${n}`;
-      readline.moveCursor(process.stdout, 0, -n);
-      readline.cursorTo(process.stdout, 0);            // then getting cursor at the begining of the line
-      readline.clearScreenDown(process.stdout);
-      process.stdout.write(msg);
-      
-      n = (msg.match(/\n/g) || []).length;
-      n+=1;
-    }, 1000);
-    try {
-        activeTasks();
-    } catch(e){
-        logger.fatal(`Error on watch`)
-    }
-}
-
-/**
- * Perform the monitoring of the active tasks of the couchDB process
- * 
- */
-export function _watch() {
-    let asyncIntervals:Boolean[] = [];
-    const runAsyncInterval = async (cb:()=>Promise<any>, interval:number, intervalIndex:number) => {
-        let data = await cb();
-        logger.info(`Data is : ${inspect(data)}`);
-        //logger.info(`${inspect(asyncIntervals)}`);
-        if (asyncIntervals[intervalIndex]) {
-            setTimeout(() => runAsyncInterval(cb, interval, intervalIndex), interval);
-        }
-    };
-
-    const setAsyncInterval = (cb:()=>Promise<any>, interval:number) => {
-        if (cb && typeof cb === "function") {
-            const intervalIndex = asyncIntervals.length;
-            asyncIntervals.push(true);
-            runAsyncInterval(cb, interval, intervalIndex);
-            return intervalIndex;
-        } else {
-            throw new Error('Callback must be a function');
-        }
-    };
-
-    const clearAsyncInterval = (intervalIndex:number) => {
-        if (asyncIntervals[intervalIndex]) {
-            asyncIntervals[intervalIndex] = false;
-        }
-    };
-     setAsyncInterval(activeTasks,
-        1000);
 }
