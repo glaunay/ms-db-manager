@@ -196,6 +196,11 @@ export class View {
     // Get see document to obtain 1st ranked key symbol
     let url = `${this.endPoint}${urlParameters(_startingParameters)}`;
     let data = await viewFetchUnwrap(url);
+    if (data.rows.length == 0) {
+      logger.debug(`Seed view document:${url} is empty`); 
+      return [];
+    }
+
     logger.debug(`Seed view document:${url} is ${inspect(data.rows[0])}`);    
     logger.debug(`Start key is ${data.rows[0].key}`);
 

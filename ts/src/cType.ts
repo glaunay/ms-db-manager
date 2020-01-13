@@ -52,7 +52,7 @@ export interface viewItem {
 export function isViewItem(d:any): d is viewItem {
     if ( !(d.hasOwnProperty('id') && d.hasOwnProperty('key') && d.hasOwnProperty('value'))  )
         return false;
-    return (    typeof(d.is) == 'string' && typeof(d.key)   == 'string' && 
+    return (    typeof(d.id) == 'string' && typeof(d.key)   == 'string' && 
             (typeof(d.value) == 'string' || typeof(d.value) == 'number') );
 }
 
@@ -67,11 +67,10 @@ export function isViewDocInterface(v:any): v is viewDocInterface {
     for (let k in v)
         if (k != 'total_rows' && k != 'offset' && k != 'rows')
             return false; 
-    // overkill
+            // overkill
     for (let d of v.rows)
-        if ( !isViewItem(d) )
+        if ( !isViewItem(d) ) 
             return false;
-
     return true;
 }
 /*
