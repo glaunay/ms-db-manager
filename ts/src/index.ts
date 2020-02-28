@@ -17,13 +17,14 @@ interface tParameters {
 program
   .option("-c, --config <path>", "Load config file")
   .option("-v, --verbosity <logLevel>", "Set log level (debug, info, success, warning, error, critical)")
- .option("-t --target <targetsOpt>", "Target databases specified as comma-separated list or regexp", parseEndpoints)
+  .option("-t --target <targetsOpt>", "Target databases specified as comma-separated list or regexp", parseEndpoints)
   .option("-d, --design <pathToFile>", "Design Document containing views definitions")
   .option("-o, --output <logFile>", "fpath to the log file")
   .option("-n, --namespace <ViewNameSpace>", "Name of the database the set or read view definitions", "vNS")
   .option("-l, --find <specie>", "Specie to list sgRNA")
   .option("-r, --rank <jsonOutputFile>", "Rank species by sgRNA counts in specified json File")
   .option("-r, --remove <specie>", "Specie to delete sgRNA")
+  .option("-s, --serial", "Force serial querying of views")
   .parse(process.argv);
 
 
@@ -67,7 +68,7 @@ logger.info("\t\t***** Starting CRISPR databases manager MicroService *****\n");
     logger.debug(`Design document content\n${inspect(_doc)}`);
   try {  
     const t1 = process.hrtime();
-    const summary = await DBmanager.registerAllBatch(dbTarget, viewNS, _doc, 2);
+    const summary = await DBmanager.registerAllBatch(dbTarget, viewNS, _doc, 1);
     logger.debug(inspect(summary));
     const t2 = timeIt(t1);
     logger.success(`Total buildIndex done in ${t2[0]}H:${t2[1]}M:${t2[2]}S`);
@@ -119,7 +120,7 @@ async function listSpecie(specie:string, ns:string) {
   let res;
   const t1 = process.hrtime();
   try {
-    res = await DBmanager.list(ns, specie);
+    res = await DBmanager.list(ns, specie, program.serial);
   } catch (e){
     throw new Error(`listSpecie failed ${e}`);
   }

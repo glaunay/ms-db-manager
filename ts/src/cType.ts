@@ -50,8 +50,10 @@ export interface viewItem {
 }
 
 export function isViewItem(d:any): d is viewItem {
+   
     if ( !(d.hasOwnProperty('id') && d.hasOwnProperty('key') && d.hasOwnProperty('value'))  )
         return false;
+
     return (    typeof(d.id) == 'string' && typeof(d.key)   == 'string' && 
             (typeof(d.value) == 'string' || typeof(d.value) == 'number') );
 }
@@ -65,12 +67,16 @@ export interface viewDocInterface {
 
 export function isViewDocInterface(v:any): v is viewDocInterface {
     for (let k in v)
-        if (k != 'total_rows' && k != 'offset' && k != 'rows')
+        if (k != 'total_rows' && k != 'offset' && k != 'rows') {
+            logger.error("Head error");
             return false; 
+        } 
             // overkill
     for (let d of v.rows)
-        if ( !isViewItem(d) ) 
+        if ( !isViewItem(d) ) {
+            logger.error(`Non valid view item container at : ${inspect(d)}`);
             return false;
+        }
     return true;
 }
 /*

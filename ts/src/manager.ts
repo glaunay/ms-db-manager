@@ -69,7 +69,7 @@ async function parseMsg(couchMsg:Promise<t.couchResponse>):Promise<t.couchRespon
  * @returns {Object} Raw results of the queried views
  * @memberof DBmanager
  */
-export async function _registerAllBatch(endPoints:string[], viewNS:string, designObject?:{}, n:number = 2):Promise<any> {
+export async function _registerAllBatch(endPoints:string[], viewNS:string, designObject?:{}, n:number = 1):Promise<any> {
     endPointsRegistry = endPoints.map( (endPoint) => new vLib.Volume(`${PREFIX}/${endPoint}`, endPoint, CREDS) );
     oEndPointsRegistry = {};
     endPointsRegistry.forEach((v:vLib.Volume) => { oEndPointsRegistry[v.name] = v; });
@@ -118,24 +118,28 @@ export async function _registerAllBatch(endPoints:string[], viewNS:string, desig
 
  export async function registerAllBatch(endPoints: string[], viewNS:string, designObject?:{},slice_size:number = 2):Promise<any>{
 
-    function slice_endpoints(endPointsRegistry:vLib.Volume[], size:number){
-        logger.debug("slice_endpoints")
+    function slice_endpoints(endPointsRegistry:vLib.Volume[]){
+        logger.debug(`slice_endpoints with number ${slice_size}`);
         var slicedEndPointsRegistry:vLib.Volume[][]=[]
-        for (var i=0, j=endPointsRegistry.length; i<j; i+= size){
-            slicedEndPointsRegistry.push(endPointsRegistry.slice(i, i+size))
+        for (var i=0, j=endPointsRegistry.length; i<j; i+= slice_size){
+            slicedEndPointsRegistry.push(endPointsRegistry.slice(i, i+slice_size))
         }
         return slicedEndPointsRegistry
     }
 
     logger.debug("registerAllBatch")
     endPointsRegistry = endPoints.map( (endPoint) => new vLib.Volume(`${PREFIX}/${endPoint}`, endPoint, CREDS) );
-    let slicedEndPointsRegistry = slice_endpoints(endPointsRegistry, slice_size)
+    oEndPointsRegistry = {};
+    endPointsRegistry.forEach((v:vLib.Volume) => { oEndPointsRegistry[v.name] = v; });
+    
+    let slicedEndPointsRegistry = slice_endpoints(endPointsRegistry);
 
     let indexBatchArray = slicedEndPointsRegistry.map((slice) => indexBatchFnDecorator(slice, viewNS, designObject))
 
     let all_promises = []
     for (let f of indexBatchArray){
         all_promises.push(await f())
+        logger.debug("LOOP");
     }
 
     return Promise.all(all_promises)
@@ -222,8 +226,9 @@ export async function activeTasks() {
  * @returns {Promise<t.boundViewInterface[]>} List of resulting views, each wrapped with the database and view names
  * @memberof DBmanager
  */
-export async function list(ns:string, specie:string):Promise<t.boundViewInterface[]> {
-    let spKeyArray:t.View[] = await view(ns, 'organisms', {"key":specie});
+export async function list(ns:string, specie:string, serial:Boolean=false):Promise<t.boundViewInterface[]> {
+    const fnView = serial ? viewSerial : view;
+    let spKeyArray:t.View[] = await fnView(ns, 'organisms', {"key":specie});
 
     return spKeyArray.map((v, i) => {return { vID : 'organisms', 'vNS' : ns, '_' : i, 'source' : endPointsRegistry[i].name, "view" : v };});
 }
@@ -235,9 +240,10 @@ export async function list(ns:string, specie:string):Promise<t.boundViewInterfac
  * @returns { {[k:string]:number|string}[] } A sorted List of Object storing specie sgRNA counts
  * @memberof DBmanager
  */
-export async function rank(ns:string):Promise<{[k:string]:number|string}[]> {
-  
-    let spKeyArray:t.View[] = await view(ns, `organisms`);
+export async function rank(ns:string, serial:Boolean=false):Promise<{[k:string]:number|string}[]> {
+    const fnView = serial ? viewSerial : view;
+
+    let spKeyArray:t.View[] = await fnView(ns, `organisms`);
     let _:{[k:string]:number} = {};
     for (const v of spKeyArray) {
         for await ( const vDatum of v.iteratorQuick() ) {
@@ -319,4 +325,14 @@ export async function filter(inputs:t.boundViewInterface[], _fn:t.nodePredicateF
 export function view(ns:string, cmd:string, p?:t.viewParameters):Promise<t.View[]> {
     let views:Promise<t.View>[] = endPointsRegistry.map((vol:vLib.Volume)=> vol.view(ns, cmd, p));
     return Promise.all(views);
+}
+
+export async function viewSerial(ns:string, cmd:string, p?:t.viewParameters):Promise<t.View[]> {
+    logger.info("Performing serial view queries");
+    let data:t.View[] = [];
+    for (let vol of endPointsRegistry) {
+        data.push(await vol.view(ns, cmd, p))
+    }
+
+    return data;
 }
