@@ -98,7 +98,7 @@ logger.info("\t\t***** Starting CRISPR databases manager MicroService *****\n");
  */
 async function rankSpecies(viewNS:string, jsonOutputFile:string) {
   const t1 = process.hrtime();
-  const report = await DBmanager.rank(viewNS);
+  const report = await DBmanager.rank(viewNS, program.serial);
   logger.debug(inspect(report, {depth:6}));
   const t2 = timeIt(t1);
   
