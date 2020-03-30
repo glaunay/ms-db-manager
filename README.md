@@ -51,12 +51,23 @@ would return
 ]
 ```
 
+To interrogate views, you need config.json file with access keys to database. Example : 
+```json
+{
+    "login": "couch_agent",
+    "password": "couch",
+    "adress": "localhost",
+    "port": 5984
+}
+
+```
+
 #### Indexing
 
 You setup a view over a range of databases the following way
 
 ```sh
-node index.js --target '[RANGE_EXPR]' --design  [DESIGN_DOCUMENT]--namespace [DESIGN_FOLDER]
+node index.js --target '[RANGE_EXPR]' --design  [DESIGN_DOCUMENT]--namespace [DESIGN_FOLDER] --config [CONFIG_JSON_FILE]
 ```
 
 Where,
@@ -71,7 +82,7 @@ All databases will be checked for the availability of the provided view. It may 
 ##### Example
 
 ```sh
-node index.js --target 'crispr_rc01_v3[7-8]' --design ../views/byOrganism.json
+node index.js --target 'crispr_rc01_v3[7-8]' --design ../views/byOrganism.json --config ../config.json
 ```
 
 **NB** When a database is modified, its corresponding views are not rebuildt until they are queried again.
@@ -84,7 +95,7 @@ If you choose a specific `namespace` during the indexation step, you will have t
 #### List all species with their respective number of snRNAs entries
 
 ```sh
-node index.js --target [RANGE_EXPR] --rank [JSON_OUPUT]
+node index.js --target [RANGE_EXPR] --rank [JSON_OUPUT] --config [CONFIG_JSON_FILE]
 ```
 
 where,
@@ -95,7 +106,7 @@ where,
 ##### Example
 
 ```sh
-node index.js --target 'crispr_rc01_v3[7-8]' --rank rankings.json
+node index.js --target 'crispr_rc01_v3[7-8]' --rank rankings.json --config ../config.json
 ```
 
 will produce a `rankings.json` file with the following content type
@@ -112,7 +123,7 @@ will produce a `rankings.json` file with the following content type
 #### List the sgRNAs relative to a particular specie
 
 ```sh
-node index.js --target [RANGE_EXPR] --find [SPECIE_NAME]
+node index.js --target [RANGE_EXPR] --find [SPECIE_NAME] --config [CONFIG_JSON_FILE]
 ```
 
 where,
@@ -123,7 +134,7 @@ where,
 ##### Example
 
 ```sh
-node index.js --target 'crispr_rc01_v3[7-8]' --find 'Deinococcus actinosclerus GCF_001507665.1'
+node index.js --target 'crispr_rc01_v3[7-8]' --find 'Deinococcus actinosclerus GCF_001507665.1' --config ../config.json
 ```
 
 will produce a `Deinococcus actinosclerus GCF_001507665.1.json` file with the following content type,
@@ -150,7 +161,7 @@ where **"find"** references the results of the view **vNS/vID** applied to all t
 #### Delete all sgRNAs relative to a particular specie
 
 ```sh
-node index.js --target [RANGE_EXPR] --remove [SPECIE_NAME]
+node index.js --target [RANGE_EXPR] --remove [SPECIE_NAME] --config [CONFIG_JSON_FILE]
 ```
 
 where,
@@ -159,7 +170,7 @@ where,
 * `--remove [SPECIE_NAME]` is a valid complete specie name
 
 ```sh
-node index.js --target 'crispr_rc01_v3[7-8]' --remove 'Deinococcus actinosclerus GCF_001507665.1'
+node index.js --target 'crispr_rc01_v3[7-8]' --remove 'Deinococcus actinosclerus GCF_001507665.1' --config ../config.json
 ```
 
 will remove all `Deinococcus actinosclerus GCF_001507665.1.json` sgRNAs entries from the target databases
