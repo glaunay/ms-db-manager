@@ -174,3 +174,11 @@ node index.js --target 'crispr_rc01_v3[7-8]' --remove 'Deinococcus actinosclerus
 ```
 
 will remove all `Deinococcus actinosclerus GCF_001507665.1.json` sgRNAs entries from the target databases
+
+## Watch active tasks
+
+This micro-service also allows you to monitor active tasks. Launch : 
+```
+node watcher.js --target http://user:password@localhost:5984
+```
+You need to provide user and password to access active tasks document. 
