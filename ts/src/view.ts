@@ -125,9 +125,9 @@ export class View {
   length?:number
   endPoint:string
   parameters:viewParameters
+  sgrnas:string[] = []; 
 
   constructor(nativeUrl:string, params?:viewParameters) {
-    
     if(params)
       if (!isViewParameters(params))
         throw new Error(`Non valid view parameters${inspect(params)}`)
@@ -143,8 +143,10 @@ export class View {
     if (this.parameters) 
         if (this.parameters.hasOwnProperty('key')) {
             this.length = 0;
-            for await (const _ of this.iteratorQuick()) 
-                this.length++;
+            for await (const _ of this.iteratorQuick()){
+              this.sgrnas.push(_.id)
+              this.length++;
+            }
             return;
         }
     url += '?limit=0';
