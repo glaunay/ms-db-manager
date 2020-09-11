@@ -430,7 +430,6 @@ export class Volume {
      * @memberof Volume
      */
     async updateBulk(docIDs:string[], _fn:t.nodePredicateFnType, syncSpecs?:{[k:string]: string}) {
-
         const _:t.updateBulkReport = {
             'updated' : [], 'deleted' : []
         }
@@ -444,6 +443,7 @@ export class Volume {
                 else
                     toKeep.push(doc)                                            
             }
+
             _.deleted.push( await this.bulkInsert(toDel, true) );
             _.updated.push( await this.bulkInsert(toKeep) );
             if (syncSpecs) {
@@ -490,9 +490,15 @@ export class Volume {
             "_id": srcDoc._id,
             "_rev": srcDoc._rev
         };
+        
+        for (let key of Object.keys(srcDoc).filter((k:string) => ! k.startsWith('_'))) {
+            logger.silly("I filter" + key + " " + inspect(srcDoc[key]))
+            const filtered_content = fn(key, srcDoc[key]);
+            if (filtered_content) tgtDoc[key] = filtered_content; 
+        }
+        
 
-        const nodePredicate = fn;
-        const _fn = (nodekey:string, nodeContent:any) => {
+        /*const _fn = (nodekey:string, nodeContent:any) => {
             logger.silly(`_fn on ${nodekey}`);
             if (!nodePredicate(nodekey, nodeContent)) {
                 logger.silly(`${nodekey} failed`);
@@ -504,9 +510,11 @@ export class Volume {
             if ( !isObject(nodeContent) )
                 return nodeContent;
             // The current node holds many ones, we have to account for all their k,v
+            logger.info("nodeContent " + inspect(nodeContent))
             const node:{[k:string]:any} = {};
-            
             for (let k in nodeContent) {
+                logger.info("k " + k)
+                logger.info("nodeContent[k] " + nodeContent[k])
                 let _ = _fn(k, nodeContent[k]);
                 if(_) { 
                     if (!allowEmptyObject && isEmptyObject(_))
@@ -523,7 +531,7 @@ export class Volume {
             const _ = _fn(key, srcDoc[key]);
             if(_)
                 tgtDoc[key] = _;
-        }
+        }*/
         logger.silly(`filterDoc : \n${inspect(srcDoc)}\nbecame\n${inspect(tgtDoc)}`);
         return tgtDoc;
     }
