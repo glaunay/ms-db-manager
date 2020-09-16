@@ -19,7 +19,9 @@ export function unixTimeStamp():number {
 }
 
 export function isObject(n:any):Boolean {
-    return typeof n === 'object' && n !== null
+    if (n !== null)
+        return false;
+    return typeof n === 'object' && ! (n instanceof Array);
 }
 
 export function isEmptyObject(n:any):Boolean {

@@ -490,15 +490,15 @@ export class Volume {
             "_id": srcDoc._id,
             "_rev": srcDoc._rev
         };
-        
+      /*  
         for (let key of Object.keys(srcDoc).filter((k:string) => ! k.startsWith('_'))) {
             logger.silly("I filter" + key + " " + inspect(srcDoc[key]))
             const filtered_content = fn(key, srcDoc[key]);
             if (filtered_content) tgtDoc[key] = filtered_content; 
         }
-        
+        */
 
-        /*const _fn = (nodekey:string, nodeContent:any) => {
+        const _fn = (nodekey:string, nodeContent:any) => {
             logger.silly(`_fn on ${nodekey}`);
             if (!nodePredicate(nodekey, nodeContent)) {
                 logger.silly(`${nodekey} failed`);
@@ -531,7 +531,7 @@ export class Volume {
             const _ = _fn(key, srcDoc[key]);
             if(_)
                 tgtDoc[key] = _;
-        }*/
+        }
         logger.silly(`filterDoc : \n${inspect(srcDoc)}\nbecame\n${inspect(tgtDoc)}`);
         return tgtDoc;
     }
