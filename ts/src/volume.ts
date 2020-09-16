@@ -497,7 +497,7 @@ export class Volume {
             if (filtered_content) tgtDoc[key] = filtered_content; 
         }
         */
-
+        const nodePredicate = fn;
         const _fn = (nodekey:string, nodeContent:any) => {
             logger.silly(`_fn on ${nodekey}`);
             if (!nodePredicate(nodekey, nodeContent)) {
