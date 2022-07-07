@@ -22,7 +22,7 @@
     "cli-progress": "^3.5.0",
     "commander": "^4.0.1",
     "express": "^4.17.1",
-    "moment": "^2.24.0",
+    "moment": "^2.29.4",
     "node-fetch": "^2.6.0",
     "winston": "^3.2.1"
   }
