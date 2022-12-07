@@ -21,7 +21,7 @@
     "@types/node": "^12.12.14",
     "cli-progress": "^3.5.0",
     "commander": "^4.0.1",
-    "express": "^4.17.1",
+    "express": "^4.18.2",
     "moment": "^2.24.0",
     "node-fetch": "^2.6.0",
     "winston": "^3.2.1"
